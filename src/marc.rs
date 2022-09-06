@@ -137,8 +137,6 @@ impl Field {
 
         Ok(())
     }
-
-    //fn format_indicator
 }
 
 impl fmt::Display for Field {
@@ -191,7 +189,7 @@ impl fmt::Display for Leader {
 #[derive(Debug, Clone)]
 pub struct Record {
     pub leader: Leader,
-    pub cfields: Vec<Controlfield>,
+    pub control_fields: Vec<Controlfield>,
     pub fields: Vec<Field>,
 }
 
@@ -203,7 +201,7 @@ impl Record {
 
         Ok(Record {
             leader,
-            cfields: Vec::new(),
+            control_fields: Vec::new(),
             fields: Vec::new(),
         })
     }
@@ -226,8 +224,8 @@ impl Record {
         let parser = EventReader::new(file);
         let mut record = Record::new(PLACEHOLDER_LEADER).unwrap();
 
-        let mut cfield: Option<Controlfield> = None;
-        let mut subfield: Option<Subfield> = None;
+        let mut in_cfield = false;
+        let mut in_subfield = false;
         let mut in_leader = false;
 
         for evt in parser {
@@ -240,7 +238,8 @@ impl Record {
                             if let Some(t) =
                                 attributes.iter().filter(|a| a.name.local_name.eq("tag")).next() {
                                 if let Ok(cf) = Controlfield::new(&t.value) {
-                                    cfield = Some(cf);
+                                    in_cfield = true;
+                                    record.control_fields.push(cf);
                                 }
                             } else {
                                 return Err(format!("Controlfield has no tag"));
@@ -283,6 +282,7 @@ impl Record {
                                 if let Some(code) =
                                     attributes.iter().filter(|a| a.name.local_name.eq("code")).next() {
                                     if let Ok(sf) = Subfield::new(&code.value) {
+                                        in_subfield = true;
                                         field.subfields.push(sf);
                                     }
                                 }
@@ -298,20 +298,19 @@ impl Record {
                         record.set_leader(characters);
                         in_leader = false;
 
-                    } else if cfield.is_some() {
-                        let mut cf = cfield.unwrap();
-                        cf.set_content(characters);
-                        record.cfields.push(cf);
-                        cfield = None;
+                    } else if in_cfield {
+                        if let Some(mut cf) = record.control_fields.last_mut() {
+                            cf.set_content(characters);
+                        }
+                        in_cfield = false;
 
-                    } else {
-                        // Assume we are adding field data at this point
-                        // TODO is that really a safe assumption?
+                    } else if in_subfield {
                         if let Some(mut field) = record.fields.last_mut() {
                             if let Some(mut subfield) = field.subfields.last_mut() {
                                 subfield.set_content(characters);
                             }
                         }
+                        in_subfield = false;
                     }
                 },
 
@@ -329,7 +328,7 @@ impl Record {
 impl fmt::Display for Record {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.leader);
-        for cfield in &self.cfields {
+        for cfield in &self.control_fields {
             write!(f, "\n{}", cfield);
         }
         for field in &self.fields {
