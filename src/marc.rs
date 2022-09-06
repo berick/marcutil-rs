@@ -56,6 +56,13 @@ impl Controlfield {
     }
 }
 
+impl fmt::Display for Controlfield {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} {}", self.tag, self.content)
+    }
+}
+
+
 #[derive(Debug, Clone)]
 pub struct Subfield {
     pub code: u8,
@@ -67,6 +74,18 @@ impl Subfield {
         Subfield {
             code,
             content: String::from(content)
+        }
+    }
+}
+
+impl fmt::Display for Subfield {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match std::str::from_utf8(&[self.code]) {
+            Ok(s) => write!(f, "${}{}", s, self.content),
+            Err(e) => {
+                eprintln!("Error translating subfield code to utf8: {:?} {}", self.code, e);
+                Err(fmt::Error)
+            }
         }
     }
 }
@@ -89,6 +108,41 @@ impl Field {
             ind2: None,
             subfields: Vec::new()
         })
+    }
+}
+
+impl fmt::Display for Field {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} ", self.tag);
+
+        let ind1 = match std::str::from_utf8(&[self.ind1]) {
+            Ok(i) => i,
+            Err(e) => {
+                eprintln!("Error translating ind1 to utf8: {:?} {}", self.ind1, e);
+                Err(fmt::Error)
+            }
+        };
+
+        let ind1 = match std::str::from_utf8(&[self.ind1]) {
+            Ok(i) => i,
+            Err(e) => {
+                eprintln!("Error translating ind1 to utf8: {:?} {}", self.ind1, e);
+                Err(fmt::Error)
+            }
+        };
+
+
+        match std::str::from_utf8(&[self.code]) {
+            Ok(s) => write!(f, "${}{}", s, self.content),
+            Err(e) => {
+                eprintln!("Error translating subfield code to utf8: {:?} {}", self.code, e);
+                Err(fmt::Error)
+            }
+        }
+
+
+        match self.ind1 {
+            Some(i) => write!(f, "{}"
     }
 }
 
@@ -182,10 +236,11 @@ impl Record {
 				Ok(XmlEvent::EndElement { name }) => {
 				},
 
-                Ok(XmlEvent::Characters(characters)) => {
+                Ok(XmlEvent::Characters(ref characters)) => {
 
                     if in_leader {
-                        record.set_leader(&characters);
+                        record.set_leader(characters);
+                        in_leader = false;
                     }
 
                 },
@@ -201,7 +256,7 @@ impl Record {
             }
         }
 
-        Record::new("123123123123123123123123")
+        Ok(record)
     }
 }
 
