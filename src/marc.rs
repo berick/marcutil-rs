@@ -6,7 +6,7 @@ use std::fmt;
 const LEADER_SIZE: usize = 24;
 const TAG_SIZE: usize = 3;
 const MARCXML_NAMESPACE: &'static str = "http://www.loc.gov/MARC21/slim";
-const DEFAULT_LEADER: &'static str = "                        ";
+const PLACEHOLDER_LEADER: &'static str = "                        ";
 
 #[derive(Debug, Clone)]
 pub struct Tag {
@@ -43,22 +43,35 @@ impl fmt::Display for Tag {
 #[derive(Debug, Clone)]
 pub struct Controlfield {
     pub tag: Tag,
-    pub content: String,
+    pub content: Option<String>,
 }
 
 impl Controlfield {
-    pub fn new(tag: &str, content: &str) -> Result<Self, String> {
+    pub fn new(tag: &str, content: Option<&str>) -> Result<Self, String> {
         let t = Tag::new(tag)?;
+
+        let c = match content {
+            Some(c) => Some(String::from(c)),
+            None => None
+        };
+
         Ok(Controlfield {
             tag: t,
-            content: String::from(content),
+            content: c
         })
+    }
+
+    pub fn set_content(&mut self, content: &str) {
+        self.content = Some(String::from(content));
     }
 }
 
 impl fmt::Display for Controlfield {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{} {}", self.tag, self.content)
+        match &self.content {
+            Some(c) => write!(f, "{} {}", self.tag, c),
+            None => write!(f, "{}", self.tag)
+        }
     }
 }
 
@@ -66,14 +79,19 @@ impl fmt::Display for Controlfield {
 #[derive(Debug, Clone)]
 pub struct Subfield {
     pub code: u8,
-    pub content: String,
+    pub content: Option<String>,
 }
 
 impl Subfield {
-    pub fn new(code: u8, content: &str) -> Self {
+    pub fn new(code: u8, content: Option<&str>) -> Self {
+        let c = match content {
+            Some(c) => Some(String::from(c)),
+            None => None
+        };
+
         Subfield {
             code,
-            content: String::from(content)
+            content: c
         }
     }
 }
@@ -81,12 +99,18 @@ impl Subfield {
 impl fmt::Display for Subfield {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match std::str::from_utf8(&[self.code]) {
-            Ok(s) => write!(f, "${}{}", s, self.content),
+            Ok(s) => { write!(f, "${}", s); },
             Err(e) => {
                 eprintln!("Error translating subfield code to utf8: {:?} {}", self.code, e);
-                Err(fmt::Error)
+                return Err(fmt::Error);
             }
         }
+
+        if let Some(c) = &self.content {
+            write!(f, "{}", c);
+        }
+
+        Ok(())
     }
 }
 
@@ -115,34 +139,37 @@ impl fmt::Display for Field {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{} ", self.tag);
 
-        let ind1 = match std::str::from_utf8(&[self.ind1]) {
-            Ok(i) => i,
-            Err(e) => {
-                eprintln!("Error translating ind1 to utf8: {:?} {}", self.ind1, e);
-                Err(fmt::Error)
-            }
-        };
-
-        let ind1 = match std::str::from_utf8(&[self.ind1]) {
-            Ok(i) => i,
-            Err(e) => {
-                eprintln!("Error translating ind1 to utf8: {:?} {}", self.ind1, e);
-                Err(fmt::Error)
-            }
-        };
-
-
-        match std::str::from_utf8(&[self.code]) {
-            Ok(s) => write!(f, "${}{}", s, self.content),
-            Err(e) => {
-                eprintln!("Error translating subfield code to utf8: {:?} {}", self.code, e);
-                Err(fmt::Error)
-            }
+        match self.ind1 {
+            Some(ind) => {
+                match std::str::from_utf8(&[ind]) {
+                    Ok(i) => { write!(f, "{}", i); }
+                    Err(e) => {
+                        eprintln!("Error translating ind1 to utf8: {:?} {}", ind, e);
+                        return Err(fmt::Error);
+                    }
+                }
+            },
+            None => { write!(f, "\\"); }
         }
 
+        match self.ind2 {
+            Some(ind) => {
+                match std::str::from_utf8(&[ind]) {
+                    Ok(i) => { write!(f, "{}", i); }
+                    Err(e) => {
+                        eprintln!("Error translating ind2 to utf8: {:?} {}", ind, e);
+                        return Err(fmt::Error);
+                    }
+                }
+            },
+            None => { write!(f, "\\"); }
+        }
 
-        match self.ind1 {
-            Some(i) => write!(f, "{}"
+        for sf in &self.subfields {
+            write!(f, "{}", sf);
+        }
+
+        Ok(())
     }
 }
 
@@ -216,7 +243,7 @@ impl Record {
 
         let file = BufReader::new(file);
         let parser = EventReader::new(file);
-        let mut record = Record::new(DEFAULT_LEADER).unwrap();
+        let mut record = Record::new(PLACEHOLDER_LEADER).unwrap();
 
         let mut cfield: Option<Controlfield> = None;
         let mut field: Option<Field> = None;
@@ -226,9 +253,17 @@ impl Record {
         for evt in parser {
             match evt {
 
-				Ok(XmlEvent::StartElement { name, .. }) => {
+				Ok(XmlEvent::StartElement { name, attributes, .. }) => {
                     match name.local_name.as_str() {
                         "leader" => in_leader = true,
+                        "controlfield" => {
+                            if let Some(t) =
+                                attributes.iter().filter(|a| a.name.local_name.eq("tag")).next() {
+                                if let Ok(cf) = Controlfield::new(&t.value, None) {
+                                    cfield = Some(cf);
+                                }
+                            }
+                        }
                         _ => {}
                     }
 				},
@@ -241,6 +276,12 @@ impl Record {
                     if in_leader {
                         record.set_leader(characters);
                         in_leader = false;
+
+                    } else if cfield.is_some() {
+                        let mut cf = cfield.unwrap();
+                        cf.set_content(characters);
+                        record.cfields.push(cf);
+                        cfield = None;
                     }
 
                 },
@@ -262,7 +303,14 @@ impl Record {
 
 impl fmt::Display for Record {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}\n", self.leader)
+        write!(f, "{}", self.leader);
+        for cfield in &self.cfields {
+            write!(f, "\n{}", cfield);
+        }
+        for field in &self.fields {
+            write!(f, "\n{}", field);
+        }
+        Ok(())
     }
 }
 
