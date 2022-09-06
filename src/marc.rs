@@ -10,33 +10,23 @@ const PLACEHOLDER_LEADER: &'static str = "                        ";
 
 #[derive(Debug, Clone)]
 pub struct Tag {
-    pub bytes: [u8; TAG_SIZE],
+    pub content: String,
 }
 
 impl Tag {
 
     /// Returns Err() if tag is not a 3-byte string
     pub fn new(tag: &str) -> Result<Self, String> {
-        let tbytes = tag.as_bytes();
-        if tbytes.len() != TAG_SIZE {
+        if tag.len() != TAG_SIZE {
             return Err(format!("Invalid tag: {}", tag));
         }
-
-        let mut tag_bytes: [u8; TAG_SIZE] = [0; TAG_SIZE];
-        tag_bytes.copy_from_slice(&tbytes[0..TAG_SIZE]);
-        Ok(Tag { bytes: tag_bytes })
+        Ok(Tag { content: String::from(tag) })
     }
 }
 
 impl fmt::Display for Tag {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match std::str::from_utf8(&self.bytes) {
-            Ok(s) => write!(f, "{}", s),
-            Err(e) => {
-                eprintln!("Error translating tag bytes to utf8: {:?} {}", self.bytes, e);
-                Err(fmt::Error)
-            }
-        }
+        write!(f, "{}", self.content)
     }
 }
 
@@ -47,17 +37,12 @@ pub struct Controlfield {
 }
 
 impl Controlfield {
-    pub fn new(tag: &str, content: Option<&str>) -> Result<Self, String> {
+    pub fn new(tag: &str) -> Result<Self, String> {
         let t = Tag::new(tag)?;
-
-        let c = match content {
-            Some(c) => Some(String::from(c)),
-            None => None
-        };
 
         Ok(Controlfield {
             tag: t,
-            content: c
+            content: None,
         })
     }
 
@@ -78,38 +63,34 @@ impl fmt::Display for Controlfield {
 
 #[derive(Debug, Clone)]
 pub struct Subfield {
-    pub code: u8,
+    pub code: String,
     pub content: Option<String>,
 }
 
 impl Subfield {
-    pub fn new(code: u8, content: Option<&str>) -> Self {
-        let c = match content {
-            Some(c) => Some(String::from(c)),
-            None => None
-        };
 
-        Subfield {
-            code,
-            content: c
+    pub fn new(code: &str) -> Result<Self, String> {
+
+        if code.len() != 1 {
+            return Err(format!("Invalid subfield code: {}", code));
         }
+
+        Ok(Subfield {
+            code: String::from(code),
+            content: None,
+        })
     }
+
+    pub fn set_content(&mut self, content: &str) {
+        self.content = Some(String::from(content));
+    }
+
 }
 
 impl fmt::Display for Subfield {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match std::str::from_utf8(&[self.code]) {
-            Ok(s) => { write!(f, "${}", s); },
-            Err(e) => {
-                eprintln!("Error translating subfield code to utf8: {:?} {}", self.code, e);
-                return Err(fmt::Error);
-            }
-        }
-
-        if let Some(c) = &self.content {
-            write!(f, "{}", c);
-        }
-
+        write!(f, "${}", self.code);
+        if let Some(c) = &self.content { write!(f, "{}", c); }
         Ok(())
     }
 }
@@ -117,8 +98,8 @@ impl fmt::Display for Subfield {
 #[derive(Debug, Clone)]
 pub struct Field {
     pub tag: Tag,
-    pub ind1: Option<u8>,
-    pub ind2: Option<u8>,
+    pub ind1: Option<String>,
+    pub ind2: Option<String>,
     pub subfields: Vec<Subfield>
 }
 
@@ -133,35 +114,44 @@ impl Field {
             subfields: Vec::new()
         })
     }
+
+    pub fn set_ind(&mut self, ind: &str, first: bool) -> Result<(), String> {
+
+        if ind.eq("") || ind.eq(" ") {
+            if first {
+                self.ind1 = None;
+            } else {
+                self.ind2 = None;
+            }
+
+        } else {
+            if ind.len() != 1 {
+                return Err(format!("Invalid indicator value {}", ind));
+            }
+            if first {
+                self.ind1 = Some(String::from(ind));
+            } else {
+                self.ind2 = Some(String::from(ind));
+            }
+        }
+
+        Ok(())
+    }
+
+    //fn format_indicator
 }
 
 impl fmt::Display for Field {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{} ", self.tag);
 
-        match self.ind1 {
-            Some(ind) => {
-                match std::str::from_utf8(&[ind]) {
-                    Ok(i) => { write!(f, "{}", i); }
-                    Err(e) => {
-                        eprintln!("Error translating ind1 to utf8: {:?} {}", ind, e);
-                        return Err(fmt::Error);
-                    }
-                }
-            },
+        match &self.ind1 {
+            Some(ind) => { write!(f, "{}", ind); },
             None => { write!(f, "\\"); }
         }
 
-        match self.ind2 {
-            Some(ind) => {
-                match std::str::from_utf8(&[ind]) {
-                    Ok(i) => { write!(f, "{}", i); }
-                    Err(e) => {
-                        eprintln!("Error translating ind2 to utf8: {:?} {}", ind, e);
-                        return Err(fmt::Error);
-                    }
-                }
-            },
+        match &self.ind2 {
+            Some(ind) => { write!(f, "{}", ind); },
             None => { write!(f, "\\"); }
         }
 
@@ -175,34 +165,25 @@ impl fmt::Display for Field {
 
 #[derive(Debug, Clone)]
 pub struct Leader {
-    pub bytes: [u8; LEADER_SIZE],
+    pub content: String,
 }
 
 impl Leader {
 
     /// Returns Err() if leader does not contain the expected number of bytes
-    pub fn new(tag: &str) -> Result<Self, String> {
-        let bytes = tag.as_bytes();
-        if bytes.len() != LEADER_SIZE {
-            return Err(format!("Invalid tag: {}", tag));
+    pub fn new(content: &str) -> Result<Self, String> {
+
+        if content.len() != LEADER_SIZE {
+            return Err(format!("Invalid leader: {}", content));
         }
 
-        let mut lbytes: [u8; LEADER_SIZE] = [0; LEADER_SIZE];
-        lbytes.copy_from_slice(&bytes[0..LEADER_SIZE]);
-
-        Ok(Leader { bytes: lbytes })
+        Ok(Leader { content: String::from(content) })
     }
 }
 
 impl fmt::Display for Leader {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match std::str::from_utf8(&self.bytes) {
-            Ok(s) => write!(f, "LDR {}", s),
-            Err(e) => {
-                eprintln!("Error translating leader bytes to utf8: {:?} {}", self.bytes, e);
-                Err(fmt::Error)
-            }
-        }
+        write!(f, "LDR {}", self.content)
     }
 }
 
@@ -246,7 +227,6 @@ impl Record {
         let mut record = Record::new(PLACEHOLDER_LEADER).unwrap();
 
         let mut cfield: Option<Controlfield> = None;
-        let mut field: Option<Field> = None;
         let mut subfield: Option<Subfield> = None;
         let mut in_leader = false;
 
@@ -259,18 +239,57 @@ impl Record {
                         "controlfield" => {
                             if let Some(t) =
                                 attributes.iter().filter(|a| a.name.local_name.eq("tag")).next() {
-                                if let Ok(cf) = Controlfield::new(&t.value, None) {
+                                if let Ok(cf) = Controlfield::new(&t.value) {
                                     cfield = Some(cf);
                                 }
                             } else {
                                 return Err(format!("Controlfield has no tag"));
                             }
+                        },
+                        "datafield" => {
+                            let mut tag_added = false;
+
+                            if let Some(t) =
+                                attributes.iter().filter(|a| a.name.local_name.eq("tag")).next() {
+                                if let Ok(f) = Field::new(&t.value) {
+                                    tag_added = true;
+                                    record.fields.push(f);
+                                }
+                            }
+
+                            if !tag_added { continue; }
+
+                            if let Some(ind) =
+                                attributes.iter().filter(|a| a.name.local_name.eq("ind1")).next() {
+                                if ind.value.len() == 1 {
+                                    if let Some(mut field) = record.fields.last_mut() {
+                                        field.set_ind(&ind.value, true);
+                                    }
+                                }
+                            }
+
+                            if let Some(ind) =
+                                attributes.iter().filter(|a| a.name.local_name.eq("ind2")).next() {
+                                if ind.value.len() == 1 {
+                                    if let Some(mut field) = record.fields.last_mut() {
+                                        field.set_ind(&ind.value, false);
+                                    }
+                                }
+                            }
+
+                        },
+                        "subfield" => {
+                            if let Some(mut field) = record.fields.last_mut() {
+                                if let Some(code) =
+                                    attributes.iter().filter(|a| a.name.local_name.eq("code")).next() {
+                                    if let Ok(sf) = Subfield::new(&code.value) {
+                                        field.subfields.push(sf);
+                                    }
+                                }
+                            }
                         }
                         _ => {}
                     }
-				},
-
-				Ok(XmlEvent::EndElement { name }) => {
 				},
 
                 Ok(XmlEvent::Characters(ref characters)) => {
@@ -284,8 +303,16 @@ impl Record {
                         cf.set_content(characters);
                         record.cfields.push(cf);
                         cfield = None;
-                    }
 
+                    } else {
+                        // Assume we are adding field data at this point
+                        // TODO is that really a safe assumption?
+                        if let Some(mut field) = record.fields.last_mut() {
+                            if let Some(mut subfield) = field.subfields.last_mut() {
+                                subfield.set_content(characters);
+                            }
+                        }
+                    }
                 },
 
 				Err(e) => {
