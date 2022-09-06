@@ -262,6 +262,8 @@ impl Record {
                                 if let Ok(cf) = Controlfield::new(&t.value, None) {
                                     cfield = Some(cf);
                                 }
+                            } else {
+                                return Err(format!("Controlfield has no tag"));
                             }
                         }
                         _ => {}
@@ -284,10 +286,6 @@ impl Record {
                         cfield = None;
                     }
 
-                },
-
-                Ok(XmlEvent::CData(characters)) => {
-                    println!("CData: {}", characters);
                 },
 
 				Err(e) => {
