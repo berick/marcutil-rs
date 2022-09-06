@@ -22,6 +22,10 @@ impl Tag {
         }
         Ok(Tag { content: String::from(tag) })
     }
+
+    pub fn to_breaker(&self) -> String {
+        String::from(&self.content)
+    }
 }
 
 impl fmt::Display for Tag {
@@ -49,14 +53,18 @@ impl Controlfield {
     pub fn set_content(&mut self, content: &str) {
         self.content = Some(String::from(content));
     }
+
+    pub fn to_breaker(&self) -> String {
+        match &self.content {
+            Some(c) => format!("{} {}", self.tag, c),
+            None => format!("{}", self.tag)
+        }
+    }
 }
 
 impl fmt::Display for Controlfield {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match &self.content {
-            Some(c) => write!(f, "{} {}", self.tag, c),
-            None => write!(f, "{}", self.tag)
-        }
+        write!(f, "{}", self.to_breaker())
     }
 }
 
@@ -85,13 +93,19 @@ impl Subfield {
         self.content = Some(String::from(content));
     }
 
+    pub fn to_breaker(&self) -> String {
+        let s = format!("${}", self.code);
+        if let Some(c) = &self.content {
+            s + c
+        } else {
+            s
+        }
+    }
 }
 
 impl fmt::Display for Subfield {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "${}", self.code);
-        if let Some(c) = &self.content { write!(f, "{}", c); }
-        Ok(())
+        write!(f, "{}", self.to_breaker())
     }
 }
 
@@ -137,27 +151,33 @@ impl Field {
 
         Ok(())
     }
+
+    pub fn to_breaker(&self) -> String {
+        let mut s = self.tag.to_string();
+
+        if let Some(ind) = &self.ind1 {
+            s += ind;
+        } else {
+            s += "\\";
+        }
+
+        if let Some(ind) = &self.ind2 {
+            s += ind;
+        } else {
+            s += "\\";
+        }
+
+        for sf in &self.subfields {
+            s += sf.to_breaker().as_str();
+        }
+
+        s
+    }
 }
 
 impl fmt::Display for Field {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{} ", self.tag);
-
-        match &self.ind1 {
-            Some(ind) => { write!(f, "{}", ind); },
-            None => { write!(f, "\\"); }
-        }
-
-        match &self.ind2 {
-            Some(ind) => { write!(f, "{}", ind); },
-            None => { write!(f, "\\"); }
-        }
-
-        for sf in &self.subfields {
-            write!(f, "{}", sf);
-        }
-
-        Ok(())
+        write!(f, "{}", self.to_breaker())
     }
 }
 
@@ -177,11 +197,15 @@ impl Leader {
 
         Ok(Leader { content: String::from(content) })
     }
+
+    pub fn to_breaker(&self) -> String {
+        format!("LDR {}", self.content)
+    }
 }
 
 impl fmt::Display for Leader {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "LDR {}", self.content)
+        write!(f, "{}", self.to_breaker())
     }
 }
 
@@ -323,18 +347,22 @@ impl Record {
 
         Ok(record)
     }
+
+    pub fn to_breaker(&self) -> String {
+        let mut s = self.leader.to_breaker();
+        for cfield in &self.control_fields {
+            s += format!("\n{}", cfield.to_breaker()).as_str();
+        }
+        for field in &self.fields {
+            s += format!("\n{}", field.to_breaker()).as_str();
+        }
+        s
+    }
 }
 
 impl fmt::Display for Record {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.leader);
-        for cfield in &self.control_fields {
-            write!(f, "\n{}", cfield);
-        }
-        for field in &self.fields {
-            write!(f, "\n{}", field);
-        }
-        Ok(())
+        write!(f, "{}", self.to_breaker())
     }
 }
 
