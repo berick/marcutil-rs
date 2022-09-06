@@ -1,8 +1,12 @@
 use xml::reader::{EventReader, XmlEvent};
-use std::fs;
+use std::fs::File;
+use std::io::BufReader;
+use std::fmt;
 
 const LEADER_SIZE: usize = 24;
 const TAG_SIZE: usize = 3;
+const MARCXML_NAMESPACE: &'static str = "http://www.loc.gov/MARC21/slim";
+const DEFAULT_LEADER: &'static str = "                        ";
 
 #[derive(Debug, Clone)]
 pub struct Tag {
@@ -21,6 +25,18 @@ impl Tag {
         let mut tag_bytes: [u8; TAG_SIZE] = [0; TAG_SIZE];
         tag_bytes.copy_from_slice(&tbytes[0..TAG_SIZE]);
         Ok(Tag { bytes: tag_bytes })
+    }
+}
+
+impl fmt::Display for Tag {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match std::str::from_utf8(&self.bytes) {
+            Ok(s) => write!(f, "{}", s),
+            Err(e) => {
+                eprintln!("Error translating tag bytes to utf8: {:?} {}", self.bytes, e);
+                Err(fmt::Error)
+            }
+        }
     }
 }
 
@@ -77,8 +93,42 @@ impl Field {
 }
 
 #[derive(Debug, Clone)]
+pub struct Leader {
+    pub bytes: [u8; LEADER_SIZE],
+}
+
+impl Leader {
+
+    /// Returns Err() if leader does not contain the expected number of bytes
+    pub fn new(tag: &str) -> Result<Self, String> {
+        let bytes = tag.as_bytes();
+        if bytes.len() != LEADER_SIZE {
+            return Err(format!("Invalid tag: {}", tag));
+        }
+
+        let mut lbytes: [u8; LEADER_SIZE] = [0; LEADER_SIZE];
+        lbytes.copy_from_slice(&bytes[0..LEADER_SIZE]);
+
+        Ok(Leader { bytes: lbytes })
+    }
+}
+
+impl fmt::Display for Leader {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match std::str::from_utf8(&self.bytes) {
+            Ok(s) => write!(f, "LDR {}", s),
+            Err(e) => {
+                eprintln!("Error translating leader bytes to utf8: {:?} {}", self.bytes, e);
+                Err(fmt::Error)
+            }
+        }
+    }
+}
+
+
+#[derive(Debug, Clone)]
 pub struct Record {
-    pub leader: [u8; LEADER_SIZE],
+    pub leader: Leader,
     pub cfields: Vec<Controlfield>,
     pub fields: Vec<Field>,
 }
@@ -87,38 +137,77 @@ impl Record {
 
     /// Returns Err() if leader is not a 24-byte string.
     pub fn new(leader: &str) -> Result<Self, String> {
-
-        let bytes = leader.as_bytes();
-
-        if bytes.len() != LEADER_SIZE {
-            return Err(format!("Invalid leader: {}", leader));
-        }
-
-        let mut leader_bytes: [u8; LEADER_SIZE] = [0; LEADER_SIZE];
-        leader_bytes.copy_from_slice(&bytes[0..LEADER_SIZE]);
+        let leader = Leader::new(leader)?;
 
         Ok(Record {
-            leader: leader_bytes,
+            leader,
             cfields: Vec::new(),
             fields: Vec::new(),
         })
     }
 
+    pub fn set_leader(&mut self, leader: &str) -> Result<(), String> {
+        self.leader = Leader::new(leader)?;
+        Ok(())
+    }
+
     pub fn from_xml_file(filename: &str) -> Result<Self, String> {
 
-        let xml = match fs::read_to_string(filename) {
-            Ok(x) => x,
+        let file = match File::open(filename) {
+            Ok(f) => f,
             Err(e) => {
-                return Err(format!(
-                    "Cannot read MARCXML file: {} {}", filename, e));
+                return Err(format!("Cannot read MARCXML file: {} {}", filename, e));
             }
         };
 
-        Record::from_xml(&xml)
-    }
+        let file = BufReader::new(file);
+        let parser = EventReader::new(file);
+        let mut record = Record::new(DEFAULT_LEADER).unwrap();
 
-    pub fn from_xml(xml: &str) -> Result<Self, String> {
+        let mut cfield: Option<Controlfield> = None;
+        let mut field: Option<Field> = None;
+        let mut subfield: Option<Subfield> = None;
+        let mut in_leader = false;
+
+        for evt in parser {
+            match evt {
+
+				Ok(XmlEvent::StartElement { name, .. }) => {
+                    match name.local_name.as_str() {
+                        "leader" => in_leader = true,
+                        _ => {}
+                    }
+				},
+
+				Ok(XmlEvent::EndElement { name }) => {
+				},
+
+                Ok(XmlEvent::Characters(characters)) => {
+
+                    if in_leader {
+                        record.set_leader(&characters);
+                    }
+
+                },
+
+                Ok(XmlEvent::CData(characters)) => {
+                    println!("CData: {}", characters);
+                },
+
+				Err(e) => {
+                    return Err(format!("Error parsing MARCXML: {}", e));
+                }
+				_ => {}
+            }
+        }
+
         Record::new("123123123123123123123123")
+    }
+}
+
+impl fmt::Display for Record {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}\n", self.leader)
     }
 }
 

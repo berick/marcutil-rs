@@ -15,6 +15,7 @@ fn main() {
         println!("Reading XML file: {}", filename);
         let record =
             marc::Record::from_xml_file(&filename).expect("MARCXML File Parse");
+        println!("Record\n{}", record);
     }
 }
 
