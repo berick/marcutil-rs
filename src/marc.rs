@@ -6,47 +6,26 @@ use std::fmt;
 const LEADER_SIZE: usize = 24;
 const TAG_SIZE: usize = 3;
 const MARCXML_NAMESPACE: &'static str = "http://www.loc.gov/MARC21/slim";
+const MARCXML_XSI_NAMESPACE: &'static str = "http://www.w3.org/2001/XMLSchema-instance";
+const MARCXML_SCHEMA_LOCATION: &'static str =
+    "http://www.loc.gov/MARC21/slim http://www.loc.gov/standards/marcxml/schema/MARC21slim.xsd";
 
-#[derive(Debug, Clone)]
-pub struct Tag {
-    pub content: String,
-}
-
-impl Tag {
-
-    /// Returns Err() if tag is not a 3-byte string
-    pub fn new(tag: &str) -> Result<Self, String> {
-        if tag.len() != TAG_SIZE {
-            return Err(format!("Invalid tag: {}", tag));
-        }
-        Ok(Tag { content: String::from(tag) })
-    }
-
-    pub fn to_breaker(&self) -> String {
-        String::from(&self.content)
-    }
-}
-
-impl fmt::Display for Tag {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.content)
-    }
+fn escape_breaker(value: &str) -> String {
+    value.replace("$", "${dollar}")
 }
 
 #[derive(Debug, Clone)]
 pub struct Controlfield {
-    pub tag: Tag,
+    pub tag: String,
     pub content: Option<String>,
 }
 
 impl Controlfield {
-    pub fn new(tag: &str) -> Result<Self, String> {
-        let t = Tag::new(tag)?;
-
-        Ok(Controlfield {
-            tag: t,
+    pub fn new(tag: &str) -> Self {
+        Controlfield {
+            tag: tag.to_string(),
             content: None,
-        })
+        }
     }
 
     pub fn set_content(&mut self, content: &str) {
@@ -55,14 +34,14 @@ impl Controlfield {
 
     pub fn to_breaker(&self) -> String {
         match &self.content {
-            Some(c) => format!("{} {}", self.tag, c),
+            Some(c) => format!("{} {}", self.tag, escape_breaker(c)),
             None => format!("{}", self.tag)
         }
     }
 }
 
 impl fmt::Display for Controlfield {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.to_breaker())
     }
 }
@@ -95,7 +74,7 @@ impl Subfield {
     pub fn to_breaker(&self) -> String {
         let s = format!("${}", self.code);
         if let Some(c) = &self.content {
-            s + c
+            s + escape_breaker(c).as_str()
         } else {
             s
         }
@@ -103,7 +82,7 @@ impl Subfield {
 }
 
 impl fmt::Display for Subfield {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.to_breaker())
     }
 }
@@ -139,25 +118,31 @@ impl From<&str> for Indicator {
 
 #[derive(Debug, Clone)]
 pub struct Field {
-    pub tag: Tag,
+    pub tag: String,
     pub ind1: Indicator,
     pub ind2: Indicator,
     pub subfields: Vec<Subfield>
 }
 
 impl Field {
-    pub fn new(tag: &str) -> Result<Self, String> {
-        let t = Tag::new(tag)?;
-
-        Ok(Field {
-            tag: t,
+    pub fn new(tag: &str) -> Self {
+        Field {
+            tag: tag.to_string(),
             ind1: Indicator::None,
             ind2: Indicator::None,
             subfields: Vec::new()
-        })
+        }
     }
 
-    pub fn set_ind(&mut self, ind: &str, first: bool) {
+    pub fn set_ind1(&mut self, ind: &str) {
+        self.set_ind(ind, true);
+    }
+
+    pub fn set_ind2(&mut self, ind: &str) {
+        self.set_ind(ind, false);
+    }
+
+    fn set_ind(&mut self, ind: &str, first: bool) {
         if first {
             self.ind1 = ind.into();
         } else {
@@ -166,9 +151,11 @@ impl Field {
     }
 
     pub fn to_breaker(&self) -> String {
-        let mut s = self.tag.to_breaker();
-        s += self.ind1.to_breaker().as_str();
-        s += self.ind2.to_breaker().as_str();
+        let mut s = format!("{} {}{}",
+            self.tag,
+            self.ind1.to_breaker().as_str(),
+            self.ind2.to_breaker().as_str()
+        );
 
         for sf in &self.subfields {
             s += sf.to_breaker().as_str();
@@ -179,7 +166,7 @@ impl Field {
 }
 
 impl fmt::Display for Field {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.to_breaker())
     }
 }
@@ -202,12 +189,12 @@ impl Leader {
     }
 
     pub fn to_breaker(&self) -> String {
-        format!("LDR {}", self.content)
+        format!("LDR {}", escape_breaker(&self.content))
     }
 }
 
 impl fmt::Display for Leader {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.to_breaker())
     }
 }
@@ -259,49 +246,43 @@ impl Record {
 				Ok(XmlEvent::StartElement { name, attributes, .. }) => {
                     match name.local_name.as_str() {
                         "leader" => in_leader = true,
+
                         "controlfield" => {
                             if let Some(t) =
                                 attributes.iter().filter(|a| a.name.local_name.eq("tag")).next() {
-                                if let Ok(cf) = Controlfield::new(&t.value) {
-                                    in_cfield = true;
-                                    record.control_fields.push(cf);
-                                }
+                                record.control_fields.push(Controlfield::new(&t.value));
+                                in_cfield = true;
                             } else {
                                 return Err(format!("Controlfield has no tag"));
                             }
                         },
+
                         "datafield" => {
                             let mut tag_added = false;
 
                             if let Some(t) =
                                 attributes.iter().filter(|a| a.name.local_name.eq("tag")).next() {
-                                if let Ok(f) = Field::new(&t.value) {
-                                    tag_added = true;
-                                    record.fields.push(f);
-                                }
+                                record.fields.push(Field::new(&t.value));
+                                tag_added = true;
                             }
 
                             if !tag_added { continue; }
 
                             if let Some(ind) =
                                 attributes.iter().filter(|a| a.name.local_name.eq("ind1")).next() {
-                                if ind.value.len() == 1 {
-                                    if let Some(mut field) = record.fields.last_mut() {
-                                        field.set_ind(&ind.value, true);
-                                    }
+                                if let Some(mut field) = record.fields.last_mut() {
+                                    field.set_ind1(&ind.value);
                                 }
                             }
 
                             if let Some(ind) =
                                 attributes.iter().filter(|a| a.name.local_name.eq("ind2")).next() {
-                                if ind.value.len() == 1 {
-                                    if let Some(mut field) = record.fields.last_mut() {
-                                        field.set_ind(&ind.value, false);
-                                    }
+                                if let Some(mut field) = record.fields.last_mut() {
+                                    field.set_ind2(&ind.value);
                                 }
                             }
-
                         },
+
                         "subfield" => {
                             if let Some(mut field) = record.fields.last_mut() {
                                 if let Some(code) =
@@ -369,7 +350,7 @@ impl Record {
 }
 
 impl fmt::Display for Record {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.to_breaker())
     }
 }
