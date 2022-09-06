@@ -6,7 +6,6 @@ use std::fmt;
 const LEADER_SIZE: usize = 24;
 const TAG_SIZE: usize = 3;
 const MARCXML_NAMESPACE: &'static str = "http://www.loc.gov/MARC21/slim";
-const PLACEHOLDER_LEADER: &'static str = "                        ";
 
 #[derive(Debug, Clone)]
 pub struct Tag {
@@ -110,10 +109,39 @@ impl fmt::Display for Subfield {
 }
 
 #[derive(Debug, Clone)]
+pub enum Indicator {
+    One,
+    Two,
+    None,
+    Invalid,
+}
+
+impl Indicator {
+    pub fn to_breaker(&self) -> String {
+        match *self {
+            Indicator::One => String::from("1"),
+            Indicator::Two => String::from("2"),
+            _ => String::from("\\"),
+        }
+    }
+}
+
+impl From<&str> for Indicator {
+    fn from(value: &str) -> Self {
+        match value {
+            "1" => Indicator::One,
+            "2" => Indicator::Two,
+            ""  => Indicator::None,
+            _   => Indicator::Invalid
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct Field {
     pub tag: Tag,
-    pub ind1: Option<String>,
-    pub ind2: Option<String>,
+    pub ind1: Indicator,
+    pub ind2: Indicator,
     pub subfields: Vec<Subfield>
 }
 
@@ -123,49 +151,24 @@ impl Field {
 
         Ok(Field {
             tag: t,
-            ind1: None,
-            ind2: None,
+            ind1: Indicator::None,
+            ind2: Indicator::None,
             subfields: Vec::new()
         })
     }
 
-    pub fn set_ind(&mut self, ind: &str, first: bool) -> Result<(), String> {
-
-        if ind.eq("") || ind.eq(" ") {
-            if first {
-                self.ind1 = None;
-            } else {
-                self.ind2 = None;
-            }
-
+    pub fn set_ind(&mut self, ind: &str, first: bool) {
+        if first {
+            self.ind1 = ind.into();
         } else {
-            if ind.len() != 1 {
-                return Err(format!("Invalid indicator value {}", ind));
-            }
-            if first {
-                self.ind1 = Some(String::from(ind));
-            } else {
-                self.ind2 = Some(String::from(ind));
-            }
+            self.ind2 = ind.into();
         }
-
-        Ok(())
     }
 
     pub fn to_breaker(&self) -> String {
-        let mut s = self.tag.to_string();
-
-        if let Some(ind) = &self.ind1 {
-            s += ind;
-        } else {
-            s += "\\";
-        }
-
-        if let Some(ind) = &self.ind2 {
-            s += ind;
-        } else {
-            s += "\\";
-        }
+        let mut s = self.tag.to_breaker();
+        s += self.ind1.to_breaker().as_str();
+        s += self.ind2.to_breaker().as_str();
 
         for sf in &self.subfields {
             s += sf.to_breaker().as_str();
@@ -212,7 +215,7 @@ impl fmt::Display for Leader {
 
 #[derive(Debug, Clone)]
 pub struct Record {
-    pub leader: Leader,
+    pub leader: Option<Leader>,
     pub control_fields: Vec<Controlfield>,
     pub fields: Vec<Field>,
 }
@@ -220,18 +223,16 @@ pub struct Record {
 impl Record {
 
     /// Returns Err() if leader is not a 24-byte string.
-    pub fn new(leader: &str) -> Result<Self, String> {
-        let leader = Leader::new(leader)?;
-
-        Ok(Record {
-            leader,
+    pub fn new() -> Self {
+        Record {
+            leader: None,
             control_fields: Vec::new(),
             fields: Vec::new(),
-        })
+        }
     }
 
     pub fn set_leader(&mut self, leader: &str) -> Result<(), String> {
-        self.leader = Leader::new(leader)?;
+        self.leader = Some(Leader::new(leader)?);
         Ok(())
     }
 
@@ -246,7 +247,7 @@ impl Record {
 
         let file = BufReader::new(file);
         let parser = EventReader::new(file);
-        let mut record = Record::new(PLACEHOLDER_LEADER).unwrap();
+        let mut record = Record::new();
 
         let mut in_cfield = false;
         let mut in_subfield = false;
@@ -349,13 +350,20 @@ impl Record {
     }
 
     pub fn to_breaker(&self) -> String {
-        let mut s = self.leader.to_breaker();
+        let mut s = String::from("");
+
+        if let Some(ref l) = self.leader {
+            s += l.to_breaker().as_str();
+        }
+
         for cfield in &self.control_fields {
             s += format!("\n{}", cfield.to_breaker()).as_str();
         }
+
         for field in &self.fields {
             s += format!("\n{}", field.to_breaker()).as_str();
         }
+
         s
     }
 }
