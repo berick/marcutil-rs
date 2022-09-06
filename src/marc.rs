@@ -199,6 +199,11 @@ impl fmt::Display for Leader {
     }
 }
 
+struct ParseContext {
+    in_cfield: bool,
+    in_subfield: bool,
+    in_leader: bool,
+}
 
 #[derive(Debug, Clone)]
 pub struct Record {
@@ -223,6 +228,7 @@ impl Record {
         Ok(())
     }
 
+    /// Creates a Record from an XML file
     pub fn from_xml_file(filename: &str) -> Result<Self, String> {
 
         let file = match File::open(filename) {
@@ -236,98 +242,141 @@ impl Record {
         let parser = EventReader::new(file);
         let mut record = Record::new();
 
-        let mut in_cfield = false;
-        let mut in_subfield = false;
-        let mut in_leader = false;
+        let mut context = ParseContext {
+            in_cfield: false,
+            in_subfield: false,
+            in_leader: false,
+        };
 
-        for evt in parser {
-            match evt {
-
-				Ok(XmlEvent::StartElement { name, attributes, .. }) => {
-                    match name.local_name.as_str() {
-                        "leader" => in_leader = true,
-
-                        "controlfield" => {
-                            if let Some(t) =
-                                attributes.iter().filter(|a| a.name.local_name.eq("tag")).next() {
-                                record.control_fields.push(Controlfield::new(&t.value));
-                                in_cfield = true;
-                            } else {
-                                return Err(format!("Controlfield has no tag"));
-                            }
-                        },
-
-                        "datafield" => {
-                            let mut tag_added = false;
-
-                            if let Some(t) =
-                                attributes.iter().filter(|a| a.name.local_name.eq("tag")).next() {
-                                record.fields.push(Field::new(&t.value));
-                                tag_added = true;
-                            }
-
-                            if !tag_added { continue; }
-
-                            if let Some(ind) =
-                                attributes.iter().filter(|a| a.name.local_name.eq("ind1")).next() {
-                                if let Some(mut field) = record.fields.last_mut() {
-                                    field.set_ind1(&ind.value);
-                                }
-                            }
-
-                            if let Some(ind) =
-                                attributes.iter().filter(|a| a.name.local_name.eq("ind2")).next() {
-                                if let Some(mut field) = record.fields.last_mut() {
-                                    field.set_ind2(&ind.value);
-                                }
-                            }
-                        },
-
-                        "subfield" => {
-                            if let Some(mut field) = record.fields.last_mut() {
-                                if let Some(code) =
-                                    attributes.iter().filter(|a| a.name.local_name.eq("code")).next() {
-                                    if let Ok(sf) = Subfield::new(&code.value) {
-                                        in_subfield = true;
-                                        field.subfields.push(sf);
-                                    }
-                                }
-                            }
-                        }
-                        _ => {}
-                    }
-				},
-
-                Ok(XmlEvent::Characters(ref characters)) => {
-
-                    if in_leader {
-                        record.set_leader(characters);
-                        in_leader = false;
-
-                    } else if in_cfield {
-                        if let Some(mut cf) = record.control_fields.last_mut() {
-                            cf.set_content(characters);
-                        }
-                        in_cfield = false;
-
-                    } else if in_subfield {
-                        if let Some(mut field) = record.fields.last_mut() {
-                            if let Some(mut subfield) = field.subfields.last_mut() {
-                                subfield.set_content(characters);
-                            }
-                        }
-                        in_subfield = false;
-                    }
+        for evt_res in parser {
+            match evt_res {
+                Ok(evt) => {
+                    Record::handle_xml_event(&mut record, &mut context, evt)?;
                 },
-
-				Err(e) => {
+                Err(e) => {
                     return Err(format!("Error parsing MARCXML: {}", e));
                 }
-				_ => {}
             }
         }
 
         Ok(record)
+    }
+
+    /// Creates a Record from an XML string
+    pub fn from_xml(xml: &str) -> Result<Self, String> {
+        let parser = EventReader::new(xml.as_bytes());
+        let mut record = Record::new();
+
+        let mut context = ParseContext {
+            in_cfield: false,
+            in_subfield: false,
+            in_leader: false,
+        };
+
+        for evt_res in parser {
+            match evt_res {
+                Ok(evt) => {
+                    Record::handle_xml_event(&mut record, &mut context, evt)?;
+                },
+                Err(e) => {
+                    return Err(format!("Error parsing MARCXML: {}", e));
+                }
+            }
+        }
+
+        Ok(record)
+    }
+
+
+    fn handle_xml_event(record: &mut Record,
+        context: &mut ParseContext, evt: XmlEvent) -> Result<(), String> {
+
+        match evt {
+
+            XmlEvent::StartElement { name, attributes, .. } => {
+                match name.local_name.as_str() {
+
+                    "leader" => {
+                        context.in_leader = true;
+                    },
+
+                    "controlfield" => {
+                        if let Some(t) =
+                            attributes.iter().filter(|a| a.name.local_name.eq("tag")).next() {
+                            record.control_fields.push(Controlfield::new(&t.value));
+                            context.in_cfield = true;
+
+                        } else {
+                            return Err(format!("Controlfield has no tag"));
+                        }
+                    },
+
+                    "datafield" => {
+                        let mut tag_added = false;
+
+                        if let Some(t) =
+                            attributes.iter().filter(|a| a.name.local_name.eq("tag")).next() {
+                            record.fields.push(Field::new(&t.value));
+                            tag_added = true;
+                        }
+
+                        if !tag_added { return Ok(()); }
+
+                        if let Some(ind) =
+                            attributes.iter().filter(|a| a.name.local_name.eq("ind1")).next() {
+                            if let Some(mut field) = record.fields.last_mut() {
+                                field.set_ind1(&ind.value);
+                            }
+                        }
+
+                        if let Some(ind) =
+                            attributes.iter().filter(|a| a.name.local_name.eq("ind2")).next() {
+                            if let Some(mut field) = record.fields.last_mut() {
+                                field.set_ind2(&ind.value);
+                            }
+                        }
+                    },
+
+                    "subfield" => {
+                        if let Some(mut field) = record.fields.last_mut() {
+                            if let Some(code) =
+                                attributes.iter().filter(|a| a.name.local_name.eq("code")).next() {
+                                if let Ok(sf) = Subfield::new(&code.value) {
+                                    context.in_subfield = true;
+                                    field.subfields.push(sf);
+                                }
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            },
+
+            XmlEvent::Characters(ref characters) => {
+
+                if context.in_leader {
+                    record.set_leader(characters);
+                    context.in_leader = false;
+
+                } else if context.in_cfield {
+                    if let Some(mut cf) = record.control_fields.last_mut() {
+                        cf.set_content(characters);
+                    }
+                    context.in_cfield = false;
+
+                } else if context.in_subfield {
+                    if let Some(mut field) = record.fields.last_mut() {
+                        if let Some(mut subfield) = field.subfields.last_mut() {
+                            subfield.set_content(characters);
+                        }
+                    }
+                    context.in_subfield = false;
+                }
+            },
+            _ => {}
+        }
+
+        Ok(())
     }
 
     pub fn to_breaker(&self) -> String {
@@ -354,7 +403,5 @@ impl fmt::Display for Record {
         write!(f, "{}", self.to_breaker())
     }
 }
-
-
 
 
