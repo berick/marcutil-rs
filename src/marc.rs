@@ -7,6 +7,8 @@ use std::fmt;
 
 const TAG_SIZE: usize = 3;
 const LEADER_SIZE: usize = 24;
+const INDICATOR_SIZE: usize = 1;
+
 const MARCXML_NAMESPACE: &str = "http://www.loc.gov/MARC21/slim";
 const MARCXML_XSI_NAMESPACE: &str = "http://www.w3.org/2001/XMLSchema-instance";
 const MARCXML_SCHEMA_LOCATION: &str =
@@ -141,20 +143,26 @@ impl Field {
         })
     }
 
-    pub fn set_ind1(&mut self, ind: &str) {
-        self.set_ind(ind, true);
+    pub fn set_ind1(&mut self, ind: &str) -> Result<(), String> {
+        self.set_ind(ind, true)
     }
 
-    pub fn set_ind2(&mut self, ind: &str) {
-        self.set_ind(ind, false);
+    pub fn set_ind2(&mut self, ind: &str) -> Result<(), String> {
+        self.set_ind(ind, false)
     }
 
-    fn set_ind(&mut self, ind: &str, first: bool) {
+    fn set_ind(&mut self, ind: &str, first: bool) -> Result<(), String> {
+        if ind.len() != INDICATOR_SIZE {
+            return Err(format!("Invalid indicator value: {}", ind));
+        }
+
         if first {
             self.ind1 = Some(ind.to_string());
         } else {
             self.ind2 = Some(ind.to_string());
         }
+
+        Ok(())
     }
 
     pub fn to_breaker(&self) -> String {
@@ -339,14 +347,14 @@ impl Record {
                         if let Some(ind) =
                             attributes.iter().filter(|a| a.name.local_name.eq("ind1")).next() {
                             if let Some(mut field) = record.fields.last_mut() {
-                                field.set_ind1(&ind.value);
+                                field.set_ind1(&ind.value)?;
                             }
                         }
 
                         if let Some(ind) =
                             attributes.iter().filter(|a| a.name.local_name.eq("ind2")).next() {
                             if let Some(mut field) = record.fields.last_mut() {
-                                field.set_ind2(&ind.value);
+                                field.set_ind2(&ind.value)?;
                             }
                         }
                     },
