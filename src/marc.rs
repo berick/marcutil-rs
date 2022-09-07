@@ -7,13 +7,20 @@ use std::fmt;
 
 const TAG_SIZE: usize = 3;
 const LEADER_SIZE: usize = 24;
-const MARCXML_NAMESPACE: &'static str = "http://www.loc.gov/MARC21/slim";
-const MARCXML_XSI_NAMESPACE: &'static str = "http://www.w3.org/2001/XMLSchema-instance";
-const MARCXML_SCHEMA_LOCATION: &'static str =
+const MARCXML_NAMESPACE: &str = "http://www.loc.gov/MARC21/slim";
+const MARCXML_XSI_NAMESPACE: &str = "http://www.w3.org/2001/XMLSchema-instance";
+const MARCXML_SCHEMA_LOCATION: &str =
     "http://www.loc.gov/MARC21/slim http://www.loc.gov/standards/marcxml/schema/MARC21slim.xsd";
 
-fn escape_breaker(value: &str) -> String {
-    value.replace("$", "${dollar}")
+const MARC_BREAKER_SF_DELIMITER: &str = "$";
+const MARC_BREAKER_SF_DELIMITER_ESCAPE: &str = "{dollar}";
+
+fn escape_to_breaker(value: &str) -> String {
+    value.replace(MARC_BREAKER_SF_DELIMITER, MARC_BREAKER_SF_DELIMITER_ESCAPE)
+}
+
+fn unescape_from_breaker(value: &str) -> String {
+    value.replace(MARC_BREAKER_SF_DELIMITER_ESCAPE, MARC_BREAKER_SF_DELIMITER)
 }
 
 /// Replace non-ASCII characters with escaped XML entities
@@ -40,11 +47,16 @@ pub struct Controlfield {
 }
 
 impl Controlfield {
-    pub fn new(tag: &str) -> Self {
-        Controlfield {
+    pub fn new(tag: &str) -> Result<Self, String> {
+
+        if tag.len() != TAG_SIZE {
+            return Err(format!("Invalid tag: {}", tag));
+        }
+
+        Ok(Controlfield {
             tag: tag.to_string(),
             content: None,
-        }
+        })
     }
 
     pub fn set_content(&mut self, content: &str) {
@@ -53,7 +65,7 @@ impl Controlfield {
 
     pub fn to_breaker(&self) -> String {
         match &self.content {
-            Some(c) => format!("{} {}", self.tag, escape_breaker(c)),
+            Some(c) => format!("{} {}", self.tag, escape_to_breaker(c)),
             None => format!("{}", self.tag)
         }
     }
@@ -93,7 +105,7 @@ impl Subfield {
     pub fn to_breaker(&self) -> String {
         let s = format!("${}", self.code);
         if let Some(c) = &self.content {
-            s + escape_breaker(c).as_str()
+            s + escape_to_breaker(c).as_str()
         } else {
             s
         }
@@ -186,7 +198,7 @@ impl Leader {
     }
 
     pub fn to_breaker(&self) -> String {
-        format!("LDR {}", escape_breaker(&self.content))
+        format!("LDR {}", escape_to_breaker(&self.content))
     }
 }
 
@@ -300,7 +312,7 @@ impl Record {
                     "controlfield" => {
                         if let Some(t) =
                             attributes.iter().filter(|a| a.name.local_name.eq("tag")).next() {
-                            record.control_fields.push(Controlfield::new(&t.value));
+                            record.control_fields.push(Controlfield::new(&t.value)?);
                             context.in_cfield = true;
 
                         } else {
@@ -471,6 +483,58 @@ impl Record {
         }
 
         s
+    }
+
+    pub fn from_breaker(breaker: &str) -> Result<Self, String> {
+
+        let mut record = Record::new();
+
+        for line in breaker.lines() {
+            record.add_breaker_line(line)?;
+        }
+
+        Ok(record)
+    }
+
+    /// Process one line of breaker text
+    fn add_breaker_line(&mut self, line: &str) -> Result<(), String> {
+
+        if line.len() < 3 {
+            return Ok(());
+        }
+
+        if line.starts_with("LDR ") {
+            self.set_leader(&line[4..])?;
+            return Ok(());
+        }
+
+        let tag = &line[..3];
+
+        if tag < "010" {
+
+            let mut cf = Controlfield::new(tag)?;
+            if line.len() > 4 {
+                cf.set_content(unescape_from_breaker(&line[4..]).as_str());
+            }
+            self.control_fields.push(cf);
+            return Ok(());
+        }
+
+        let mut field = Field::new(tag);
+
+        if line.len() > 4 {
+            for sf in line[4..].split("$") {
+                let mut subfield = Subfield::new(&sf[..1])?;
+                if sf.len() > 1 {
+                    subfield.set_content(unescape_from_breaker(&sf[1..]).as_str());
+                }
+                field.subfields.push(subfield);
+            }
+        }
+
+        self.fields.push(field);
+
+        Ok(())
     }
 }
 

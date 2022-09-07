@@ -14,12 +14,17 @@ fn main() {
     if let Some(filename) = params.opt_str("file") {
 
         //println!("Reading XML file: {}", filename);
-        
+
         let record =
             marc::Record::from_xml_file(&filename).expect("MARCXML File Parse");
+
         //println!("Record\n{}", record);
 
-        println!("{}", record.to_xml().expect("MARC to XML OK"));
+        //println!("{}", record.to_xml().expect("MARC to XML OK"));
+
+        let breaker = record.to_breaker();
+        let record2 = Record::from_breaker(&breaker)?;
+        println!("{}", record2.to_breaker());
     }
 }
 
