@@ -24,7 +24,7 @@ fn escape_to_ascii(value: &str) -> String {
     for c in value.chars() {
         let ord: u32 = c.into();
         if ord > 126 {
-            s.push_str(format!("&#x{:x};", ord).as_str());
+            s.push_str(format!("&#x{:X};", ord).as_str());
         } else {
             s.push(c);
         }
@@ -107,51 +107,10 @@ impl fmt::Display for Subfield {
 }
 
 #[derive(Debug, Clone)]
-pub enum Indicator {
-    Zero,
-    One,
-    Two,
-    None,
-    Invalid,
-}
-
-impl Indicator {
-    pub fn to_breaker(&self) -> String {
-        match *self {
-            Indicator::Zero => String::from("0"),
-            Indicator::One => String::from("1"),
-            Indicator::Two => String::from("2"),
-            _ => String::from("\\"),
-        }
-    }
-
-    pub fn to_xml(&self) -> String {
-        match *self {
-            Indicator::Zero => String::from("0"),
-            Indicator::One => String::from("1"),
-            Indicator::Two => String::from("2"),
-            _ => String::from(" "),
-        }
-    }
-}
-
-impl From<&str> for Indicator {
-    fn from(value: &str) -> Self {
-        match value {
-            "0" => Indicator::Zero,
-            "1" => Indicator::One,
-            "2" => Indicator::Two,
-            ""  => Indicator::None,
-            _   => Indicator::Invalid
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
 pub struct Field {
     pub tag: String,
-    pub ind1: Indicator,
-    pub ind2: Indicator,
+    pub ind1: Option<String>,
+    pub ind2: Option<String>,
     pub subfields: Vec<Subfield>
 }
 
@@ -159,8 +118,8 @@ impl Field {
     pub fn new(tag: &str) -> Self {
         Field {
             tag: tag.to_string(),
-            ind1: Indicator::None,
-            ind2: Indicator::None,
+            ind1: None,
+            ind2: None,
             subfields: Vec::new()
         }
     }
@@ -175,18 +134,25 @@ impl Field {
 
     fn set_ind(&mut self, ind: &str, first: bool) {
         if first {
-            self.ind1 = ind.into();
+            self.ind1 = Some(ind.to_string());
         } else {
-            self.ind2 = ind.into();
+            self.ind2 = Some(ind.to_string());
         }
     }
 
     pub fn to_breaker(&self) -> String {
-        let mut s = format!("{} {}{}",
-            self.tag,
-            self.ind1.to_breaker().as_str(),
-            self.ind2.to_breaker().as_str()
-        );
+
+        let mut s = format!("{} ", self.tag);
+
+        match &self.ind1 {
+            Some(i) => s += format!("{i}").as_str(),
+            None => s += "\\"
+        }
+
+        match &self.ind2 {
+            Some(i) => s += format!("{i}").as_str(),
+            None => s += "\\"
+        }
 
         for sf in &self.subfields {
             s += sf.to_breaker().as_str();
@@ -415,7 +381,7 @@ impl Record {
         let mut dest: Vec<u8> = Vec::new();
         let mut writer = EmitterConfig::new().create_writer(&mut dest);
 
-        let root_event = 
+        let root_event =
             WriteEvent::start_element("record")
             .attr("xmlns", MARCXML_NAMESPACE)
             .attr("xmlns:xsi", MARCXML_XSI_NAMESPACE)
@@ -443,11 +409,22 @@ impl Record {
         }
 
         for field in &self.fields {
+
+            let ind1 = match &field.ind1 {
+                Some(ref v) => v,
+                None => ""
+            };
+
+            let ind2 = match &field.ind2 {
+                Some(ref v) => v,
+                None => ""
+            };
+
             writer.write(
                 WriteEvent::start_element("datafield")
                 .attr("tag", &field.tag)
-                .attr("ind1", field.ind1.to_xml().as_str())
-                .attr("ind2", field.ind2.to_xml().as_str())
+                .attr("ind1", ind1)
+                .attr("ind2", ind2)
             );
 
             for sf in &field.subfields {
