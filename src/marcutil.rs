@@ -1,6 +1,4 @@
 use xml::reader::{EventReader, XmlEvent};
-use xml::writer::{EmitterConfig, EventWriter};
-use xml::writer::XmlEvent as WriteEvent;
 use std::fs::File;
 use std::io::BufReader;
 use std::fmt;
@@ -25,14 +23,23 @@ fn unescape_from_breaker(value: &str) -> String {
     value.replace(MARC_BREAKER_SF_DELIMITER_ESCAPE, MARC_BREAKER_SF_DELIMITER)
 }
 
-/// Replace non-ASCII characters with escaped XML entities
-fn escape_to_ascii(value: &str) -> String {
-
+/// Replace non-ASCII characters and special characters with escaped XML entities
+fn escape_xml(value: &str) -> String {
     let mut s = String::new();
 
     for c in value.chars() {
-        let ord: u32 = c.into();
-        if ord > 126 {
+        if c == '&' {
+            s.push_str("&amp;");
+        } else if c == '\'' {
+            s.push_str("&apos;");
+        } else if c == '"' {
+            s.push_str("&quot;");
+        } else if c == '>' {
+            s.push_str("&gt;");
+        } else if c == '<' {
+            s.push_str("&lt;");
+        } else if c > '~' {
+            let ord: u32 = c.into();
             s.push_str(format!("&#x{:X};", ord).as_str());
         } else {
             s.push(c);
@@ -402,7 +409,74 @@ impl Record {
     }
 
     pub fn to_xml(&self) -> Result<String, String> {
+        // We could use XmlWriter here, but turns out it's overkill and
+        // not quite as configurable as I'd like.
 
+        let mut xml = String::from(r#"<?xml version="1.0"?>"#);
+
+        // Document root
+
+        xml += &format!(
+            r#"<record xmlns="{}" xmlns:xsi="{}" xsi:schemaLocation="{}">"#,
+            MARCXML_NAMESPACE, MARCXML_XSI_NAMESPACE, MARCXML_SCHEMA_LOCATION
+        );
+
+        // Leader
+
+        xml += "<leader>";
+        if let Some(ref l) = self.leader {
+            xml += &escape_xml(&l.content);
+        }
+        xml += "</leader>";
+
+        // Control Fields
+
+        for cfield in &self.control_fields {
+            xml += &format!(r#"<controlfield tag="{}">"#, escape_xml(&cfield.tag));
+            if let Some(ref c) = cfield.content {
+                xml += &escape_xml(c);
+            }
+            xml += "</controlfield>";
+        }
+
+        // Data Fields
+
+        for field in &self.fields {
+
+            let ind1 = match &field.ind1 {
+                Some(ref v) => v,
+                None => ""
+            };
+
+            let ind2 = match &field.ind2 {
+                Some(ref v) => v,
+                None => ""
+            };
+
+            xml += &format!(r#"<datafield tag="{}" ind1="{}" ind2="{}">"#,
+                escape_xml(&field.tag),
+                escape_xml(ind1),
+                escape_xml(ind2)
+            );
+
+            for sf in &field.subfields {
+                xml += &format!(r#"<subfield code="{}">"#, sf.code);
+
+                if let Some(ref c) = sf.content {
+                    xml += &escape_xml(c);
+                }
+
+                xml += "</subfield>";
+            }
+
+            xml += "</datafield>";
+        }
+
+        xml += "</record>";
+
+        Ok(xml)
+
+        /*
         let mut dest: Vec<u8> = Vec::new();
         let mut writer = EmitterConfig::new().create_writer(&mut dest);
 
@@ -478,6 +552,7 @@ impl Record {
             Err(e) => Err(format!(
                 "Error converting MARC bytes to string: {:?} {}", dest, e))
         }
+        */
     }
 
     pub fn to_breaker(&self) -> String {
