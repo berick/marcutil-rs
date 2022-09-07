@@ -1,10 +1,12 @@
 use xml::reader::{EventReader, XmlEvent};
+use xml::writer::{EmitterConfig, EventWriter};
+use xml::writer::XmlEvent as WriteEvent;
 use std::fs::File;
 use std::io::BufReader;
 use std::fmt;
 
-const LEADER_SIZE: usize = 24;
 const TAG_SIZE: usize = 3;
+const LEADER_SIZE: usize = 24;
 const MARCXML_NAMESPACE: &'static str = "http://www.loc.gov/MARC21/slim";
 const MARCXML_XSI_NAMESPACE: &'static str = "http://www.w3.org/2001/XMLSchema-instance";
 const MARCXML_SCHEMA_LOCATION: &'static str =
@@ -12,6 +14,23 @@ const MARCXML_SCHEMA_LOCATION: &'static str =
 
 fn escape_breaker(value: &str) -> String {
     value.replace("$", "${dollar}")
+}
+
+/// Replace non-ASCII characters with escaped XML entities
+fn escape_to_ascii(value: &str) -> String {
+
+    let mut s = String::new();
+
+    for c in value.chars() {
+        let ord: u32 = c.into();
+        if ord > 126 {
+            s.push_str(format!("&#x{:x};", ord).as_str());
+        } else {
+            s.push(c);
+        }
+    }
+
+    s
 }
 
 #[derive(Debug, Clone)]
@@ -89,6 +108,7 @@ impl fmt::Display for Subfield {
 
 #[derive(Debug, Clone)]
 pub enum Indicator {
+    Zero,
     One,
     Two,
     None,
@@ -98,9 +118,19 @@ pub enum Indicator {
 impl Indicator {
     pub fn to_breaker(&self) -> String {
         match *self {
+            Indicator::Zero => String::from("0"),
             Indicator::One => String::from("1"),
             Indicator::Two => String::from("2"),
             _ => String::from("\\"),
+        }
+    }
+
+    pub fn to_xml(&self) -> String {
+        match *self {
+            Indicator::Zero => String::from("0"),
+            Indicator::One => String::from("1"),
+            Indicator::Two => String::from("2"),
+            _ => String::from(" "),
         }
     }
 }
@@ -108,6 +138,7 @@ impl Indicator {
 impl From<&str> for Indicator {
     fn from(value: &str) -> Self {
         match value {
+            "0" => Indicator::Zero,
             "1" => Indicator::One,
             "2" => Indicator::Two,
             ""  => Indicator::None,
@@ -251,7 +282,7 @@ impl Record {
         for evt_res in parser {
             match evt_res {
                 Ok(evt) => {
-                    Record::handle_xml_event(&mut record, &mut context, evt)?;
+                    Record::handle_xml_read_event(&mut record, &mut context, evt)?;
                 },
                 Err(e) => {
                     return Err(format!("Error parsing MARCXML: {}", e));
@@ -276,7 +307,7 @@ impl Record {
         for evt_res in parser {
             match evt_res {
                 Ok(evt) => {
-                    Record::handle_xml_event(&mut record, &mut context, evt)?;
+                    Record::handle_xml_read_event(&mut record, &mut context, evt)?;
                 },
                 Err(e) => {
                     return Err(format!("Error parsing MARCXML: {}", e));
@@ -288,7 +319,7 @@ impl Record {
     }
 
 
-    fn handle_xml_event(record: &mut Record,
+    fn handle_xml_read_event(record: &mut Record,
         context: &mut ParseContext, evt: XmlEvent) -> Result<(), String> {
 
         match evt {
@@ -377,6 +408,74 @@ impl Record {
         }
 
         Ok(())
+    }
+
+    pub fn to_xml(&self) -> Result<String, String> {
+
+        let mut dest: Vec<u8> = Vec::new();
+        let mut writer = EmitterConfig::new().create_writer(&mut dest);
+
+        let root_event = 
+            WriteEvent::start_element("record")
+            .attr("xmlns", MARCXML_NAMESPACE)
+            .attr("xmlns:xsi", MARCXML_XSI_NAMESPACE)
+            .attr("xsi:schemaLocation", MARCXML_SCHEMA_LOCATION);
+
+        writer.write(root_event);
+
+        // Leader
+        writer.write(WriteEvent::start_element("leader"));
+        if let Some(ref l) = self.leader {
+            writer.write(WriteEvent::characters(&l.content));
+        }
+        writer.write(WriteEvent::end_element());
+
+        // Controlfields
+        for cfield in &self.control_fields {
+            writer.write(
+                WriteEvent::start_element("controlfield")
+                .attr("tag", &cfield.tag)
+            );
+            if let Some(ref c) = cfield.content {
+                writer.write(WriteEvent::characters(c));
+            }
+            writer.write(WriteEvent::end_element());
+        }
+
+        for field in &self.fields {
+            writer.write(
+                WriteEvent::start_element("datafield")
+                .attr("tag", &field.tag)
+                .attr("ind1", field.ind1.to_xml().as_str())
+                .attr("ind2", field.ind2.to_xml().as_str())
+            );
+
+            for sf in &field.subfields {
+                writer.write(
+                    WriteEvent::start_element("subfield")
+                    .attr("code", &sf.code)
+                );
+
+                if let Some(ref c) = sf.content {
+                    writer.write(WriteEvent::characters(c));
+                }
+
+                // End Subfield
+                writer.write(WriteEvent::end_element());
+            }
+
+            // End Datafield
+            writer.write(WriteEvent::end_element());
+        }
+
+        // End root element
+        writer.write(WriteEvent::end_element());
+
+        match std::str::from_utf8(&dest) {
+            Ok(s) => Ok(escape_to_ascii(s)),
+            Err(e) => Err(format!(
+                "Error converting MARC bytes to string: {:?} {}", dest, e))
+        }
     }
 
     pub fn to_breaker(&self) -> String {
