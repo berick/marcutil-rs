@@ -511,22 +511,23 @@ impl Record {
 
     /// Process one line of breaker text
     fn add_breaker_line(&mut self, line: &str) -> Result<(), String> {
+        let len = line.len();
 
-        if line.len() < 3 {
-            return Ok(());
-        }
-
-        if line.starts_with("LDR ") {
-            self.set_leader(&line[4..])?;
-            return Ok(());
-        }
+        if len < 3 { return Ok(()); }
 
         let tag = &line[..3];
+
+        if tag.eq("LDR") {
+            if len > 4 {
+                self.set_leader(&line[4..])?;
+            }
+            return Ok(());
+        }
 
         if tag < "010" {
 
             let mut cf = Controlfield::new(tag)?;
-            if line.len() > 4 {
+            if len > 4 {
                 cf.set_content(unescape_from_breaker(&line[4..]).as_str());
             }
             self.control_fields.push(cf);
@@ -535,8 +536,17 @@ impl Record {
 
         let mut field = Field::new(tag)?;
 
-        if line.len() > 4 {
-            for sf in line[4..].split("$") {
+        if len > 4 {
+            field.set_ind1(&line[4..5]);
+        }
+
+        if len > 5 {
+            field.set_ind2(&line[5..6]);
+        }
+
+        if len > 6 {
+            for sf in line[6..].split(MARC_BREAKER_SF_DELIMITER) {
+                if sf.len() == 0 { continue; }
                 let mut subfield = Subfield::new(&sf[..1])?;
                 if sf.len() > 1 {
                     subfield.set_content(unescape_from_breaker(&sf[1..]).as_str());

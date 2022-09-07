@@ -2,8 +2,9 @@ use marcutil as marc;
 
 const MARC_XML: &str = r#"
 <?xml version="1.0"?>
-<record xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+<record
   xmlns="http://www.loc.gov/MARC21/slim"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
   xsi:schemaLocation="http://www.loc.gov/MARC21/slim http://www.loc.gov/standards/marcxml/schema/MARC21slim.xsd">
   <leader>07649cim a2200913 i 4500</leader>
   <controlfield tag="001">233</controlfield>
@@ -31,8 +32,13 @@ const MARC_XML: &str = r#"
 "#;
 
 #[test]
-fn full_round_trip() {
+fn breaker_round_trip() {
 
-    let record = marc::Record::from_xml(MARC_XML);
+    let record = marc::Record::from_xml(MARC_XML).expect("Created record from XML");
+    let breaker = record.to_breaker();
+    let record2 = marc::Record::from_breaker(&breaker).expect("Built from breaker");
+    let breaker2 = record2.to_breaker();
+
+    assert_eq!(breaker, breaker2);
 }
 

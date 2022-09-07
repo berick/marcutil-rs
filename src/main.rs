@@ -1,7 +1,6 @@
 use std::env;
 use getopts;
-
-pub mod marc;
+use marcutil as marc;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
