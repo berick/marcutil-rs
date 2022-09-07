@@ -127,13 +127,18 @@ pub struct Field {
 }
 
 impl Field {
-    pub fn new(tag: &str) -> Self {
-        Field {
+    pub fn new(tag: &str) -> Result<Self, String> {
+
+        if tag.len() != TAG_SIZE {
+            return Err(format!("Invalid tag: {}", tag));
+        }
+
+        Ok(Field {
             tag: tag.to_string(),
             ind1: None,
             ind2: None,
             subfields: Vec::new()
-        }
+        })
     }
 
     pub fn set_ind1(&mut self, ind: &str) {
@@ -325,7 +330,7 @@ impl Record {
 
                         if let Some(t) =
                             attributes.iter().filter(|a| a.name.local_name.eq("tag")).next() {
-                            record.fields.push(Field::new(&t.value));
+                            record.fields.push(Field::new(&t.value)?);
                             tag_added = true;
                         }
 
@@ -520,7 +525,7 @@ impl Record {
             return Ok(());
         }
 
-        let mut field = Field::new(tag);
+        let mut field = Field::new(tag)?;
 
         if line.len() > 4 {
             for sf in line[4..].split("$") {

@@ -23,8 +23,9 @@ fn main() {
         //println!("{}", record.to_xml().expect("MARC to XML OK"));
 
         let breaker = record.to_breaker();
-        let record2 = Record::from_breaker(&breaker)?;
+        let record2 = marc::Record::from_breaker(&breaker).expect("Create record from breaker");
         println!("{}", record2.to_breaker());
+        println!("{}", record2.to_xml().expect("We made some xml"));
     }
 }
 
