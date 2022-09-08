@@ -45,6 +45,13 @@ impl Indicator {
             None => String::from("\\"),
         }
     }
+
+    pub fn from_breaker(content: &str) -> Self {
+        match content {
+            "\\" => Indicator { content: None },
+            _ => Indicator { content: Some(content.to_string()) },
+        }
+    }
 }
 
 impl Field {
@@ -128,11 +135,11 @@ impl Record {
         let mut field = Field::new(tag)?;
 
         if len > 4 {
-            field.set_ind1(&line[4..5]);
+            field.ind1 = Indicator::from_breaker(&line[4..5]);
         }
 
         if len > 5 {
-            field.set_ind2(&line[5..6]);
+            field.ind2 = Indicator::from_breaker(&line[5..6]);
         }
 
         if len > 6 {
