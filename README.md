@@ -3,8 +3,10 @@
 ## Synopsis
 
 ```rs
+use marcutil::Record;
+
 // Parse an XML string
-let record = marc::Record::from_xml(MARC_XML_STR).expect("Created record from XML");
+let record = Record::from_xml(MARC_XML_STR).expect("Created record from XML");
 
 if let Some(title) = record.get_values("245", "a").first() {
     println!("Maintitle => {title}");
@@ -13,13 +15,15 @@ if let Some(title) = record.get_values("245", "a").first() {
 // Turn the record into Breaker text
 let breaker = record.to_breaker();
 
+println!("Breaker: {breaker}");
+
 // Create a new record from previous record's breaker
-let record2 = marc::Record::from_breaker(&breaker).expect("Built from breaker");
+let record2 = Record::from_breaker(&breaker).expect("Built from breaker");
 
 // Generate XML from our new record
 let xml = record2.to_xml().expect("To XML");
 
-println!("Generated XML: {}", xml);
+println!("Generated XML: {xml}");
 ```
 
 ## About

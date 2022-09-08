@@ -176,6 +176,13 @@ impl Record {
         Ok(())
     }
 
+    pub fn get_control_fields(&self, tag: &str) -> Vec<&Controlfield> {
+        self.control_fields
+            .iter()
+            .filter(|f| f.tag.content.eq(tag))
+            .collect()
+    }
+
     pub fn get_fields(&self, tag: &str) -> Vec<&Field> {
         self.fields
             .iter()
