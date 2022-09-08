@@ -25,7 +25,7 @@ MARC Library for translating to/from MARC XML and MARC Breaker.
 Minimal requirements are placed on the validity or format of the data.
 
 1. Data must be UTF-8.
-1. Indicators must have a byte length of 1.
+1. Indicators and subfield codes must have a byte length of 1.
 1. Tags must have a byte length of 3.
 1. Leaders must have a byte length of 24.
 

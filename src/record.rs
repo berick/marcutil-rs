@@ -1,6 +1,7 @@
 const TAG_SIZE: usize = 3;
 const LEADER_SIZE: usize = 24;
 const INDICATOR_SIZE: usize = 1;
+const SF_CODE_SIZE: usize = 1;
 
 /// A single 3-byte tag.
 #[derive(Debug, Clone)]
@@ -50,7 +51,7 @@ impl Subfield {
 
     pub fn new(code: &str) -> Result<Self, String> {
 
-        if code.len() != 1 {
+        if code.bytes().len() != SF_CODE_SIZE {
             return Err(format!("Invalid subfield code: {}", code));
         }
 
