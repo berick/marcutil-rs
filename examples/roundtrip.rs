@@ -33,4 +33,8 @@ fn main() {
 
     println!("\n{}", record2.to_breaker());
     println!("\n{}", record2.to_xml().expect("We made some xml"));
+    println!(
+        "\n{}",
+        record2.to_xml_formatted().expect("We made some xml")
+    );
 }

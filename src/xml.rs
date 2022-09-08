@@ -17,7 +17,6 @@ const MARCXML_SCHEMA_LOCATION: &str =
 /// XML entities.
 pub fn escape_xml(value: &str) -> String {
     let mut buf = String::new();
-
     for c in value.chars() {
         if c == '&' {
             buf.push_str("&amp;");
@@ -38,6 +37,15 @@ pub fn escape_xml(value: &str) -> String {
     }
 
     buf
+}
+
+fn format(formatted: bool, value: &mut String, depth: u8) {
+    if formatted {
+        value.push_str("\n");
+        for _ in 0..depth {
+            value.push_str(" ");
+        }
+    }
 }
 
 struct ParseContext {
@@ -216,6 +224,16 @@ impl Record {
 
     /// Creates the XML representation of a MARC record as a String.
     pub fn to_xml(&self) -> Result<String, String> {
+        self.to_xml_shared(false)
+    }
+
+    /// Creates the XML representation of a MARC record as a formatted
+    /// string using 2-space indentation.
+    pub fn to_xml_formatted(&self) -> Result<String, String> {
+        self.to_xml_shared(true)
+    }
+
+    fn to_xml_shared(&self, formatted: bool) -> Result<String, String> {
         // We could use XmlWriter here, but it's overkill and
         // not quite as configurable as I'd like.
 
@@ -223,12 +241,21 @@ impl Record {
 
         // Document root
 
-        xml += &format!(
-            r#"<record xmlns="{}" xmlns:xsi="{}" xsi:schemaLocation="{}">"#,
-            MARCXML_NAMESPACE, MARCXML_XSI_NAMESPACE, MARCXML_SCHEMA_LOCATION
-        );
+        if formatted {
+            xml += &format!(
+                "\n<record\n  xmlns=\"{}\"\n  xmlns:xsi=\"{}\"\n  xsi:schemaLocation=\"{}\">",
+                MARCXML_NAMESPACE, MARCXML_XSI_NAMESPACE, MARCXML_SCHEMA_LOCATION
+            );
+        } else {
+            xml += &format!(
+                r#"<record xmlns="{}" xmlns:xsi="{}" xsi:schemaLocation="{}">"#,
+                MARCXML_NAMESPACE, MARCXML_XSI_NAMESPACE, MARCXML_SCHEMA_LOCATION
+            );
+        }
 
         // Leader
+
+        format(formatted, &mut xml, 2);
 
         xml += "<leader>";
         if let Some(ref l) = self.leader {
@@ -239,6 +266,8 @@ impl Record {
         // Control Fields
 
         for cfield in &self.control_fields {
+            format(formatted, &mut xml, 2);
+
             xml += &format!(
                 r#"<controlfield tag="{}">"#,
                 escape_xml(&cfield.tag.content)
@@ -252,6 +281,8 @@ impl Record {
         // Data Fields
 
         for field in &self.fields {
+            format(formatted, &mut xml, 2);
+
             xml += &format!(
                 r#"<datafield tag="{}" ind1="{}" ind2="{}">"#,
                 escape_xml(&field.tag.content),
@@ -260,6 +291,8 @@ impl Record {
             );
 
             for sf in &field.subfields {
+                format(formatted, &mut xml, 4);
+
                 xml += &format!(r#"<subfield code="{}">"#, sf.code);
 
                 if let Some(ref c) = sf.content {
@@ -269,8 +302,12 @@ impl Record {
                 xml += "</subfield>";
             }
 
+            format(formatted, &mut xml, 2);
+
             xml += "</datafield>";
         }
+
+        format(formatted, &mut xml, 0);
 
         xml += "</record>";
 
