@@ -11,7 +11,6 @@ pub struct Tag {
 
 impl Tag {
     pub fn new(tag: &str) -> Result<Self, String> {
-        let bytes = tag.as_bytes();
         if tag.bytes().len() == TAG_SIZE {
             Ok(Tag { content: tag.to_string() })
         } else {
@@ -75,7 +74,7 @@ pub struct Indicator {
 impl Indicator {
     pub fn new(value: &str) -> Result<Self, String> {
 
-        if value.len() > 0 { // Empty indicator is fine
+        if value.ne("") { // Empty indicator is fine
             if value.bytes().len() != INDICATOR_SIZE {
                 return Err(format!("Invalid indicator value: '{}'", value));
             }
@@ -137,8 +136,7 @@ impl Leader {
 
     /// Returns Err() if leader does not contain the expected number of bytes
     pub fn new(content: &str) -> Result<Self, String> {
-
-        if content.as_bytes().len() != LEADER_SIZE {
+        if content.bytes().len() != LEADER_SIZE {
             return Err(format!("Invalid leader: {}", content));
         }
 
