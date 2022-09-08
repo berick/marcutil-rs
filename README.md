@@ -30,6 +30,7 @@ Minimal requirements are placed on the validity and format of the data.
 1. Indicators and subfield codes must have a byte length of 1.
 1. Tags must have a byte length of 3.
 1. Leaders must have a byte length of 24.
+1. Control fields and data fields must have a tag.
 
 In cases where these conditions are not met, routines return explanatory
 Err() strings.

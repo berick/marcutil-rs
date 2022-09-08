@@ -21,6 +21,10 @@ fn main() {
 
     let record = Record::from_xml_file(&filename).expect("MARCXML File Parse");
 
+    if let Some(title) = record.get_values("245", "a").first() {
+        println!("Maintitle => {title}");
+    }
+
     println!("{}", record.to_xml().expect("MARC to XML OK"));
 
     let breaker = record.to_breaker();

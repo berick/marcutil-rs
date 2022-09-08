@@ -16,7 +16,7 @@ impl Tag {
                 content: tag.to_string(),
             })
         } else {
-            Err(format!("Invalid tag value: {}", tag))
+            Err(format!("Invalid tag value: {tag}"))
         }
     }
 }
@@ -51,7 +51,7 @@ pub struct Subfield {
 impl Subfield {
     pub fn new(code: &str) -> Result<Self, String> {
         if code.bytes().len() != SF_CODE_SIZE {
-            return Err(format!("Invalid subfield code: {}", code));
+            return Err(format!("Invalid subfield code: {code}"));
         }
 
         Ok(Subfield {
@@ -76,7 +76,7 @@ impl Indicator {
         if value.ne("") {
             // Empty indicator is fine
             if value.bytes().len() != INDICATOR_SIZE {
-                return Err(format!("Invalid indicator value: '{}'", value));
+                return Err(format!("Invalid indicator value: '{value}'"));
             }
         }
 
@@ -127,6 +127,9 @@ impl Field {
 
         Ok(())
     }
+    pub fn get_subfields(&self, code: &str) -> Vec<&Subfield> {
+        self.subfields.iter().filter(|f| f.code.eq(code)).collect()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -138,7 +141,7 @@ impl Leader {
     /// Returns Err() if leader does not contain the expected number of bytes
     pub fn new(content: &str) -> Result<Self, String> {
         if content.bytes().len() != LEADER_SIZE {
-            return Err(format!("Invalid leader: {}", content));
+            return Err(format!("Invalid leader: {content}"));
         }
 
         Ok(Leader {
@@ -171,5 +174,24 @@ impl Record {
     pub fn set_leader(&mut self, leader: &str) -> Result<(), String> {
         self.leader = Some(Leader::new(leader)?);
         Ok(())
+    }
+
+    pub fn get_fields(&self, tag: &str) -> Vec<&Field> {
+        self.fields
+            .iter()
+            .filter(|f| f.tag.content.eq(tag))
+            .collect()
+    }
+
+    pub fn get_values(&self, tag: &str, sfcode: &str) -> Vec<&str> {
+        let mut vec = Vec::new();
+        for field in self.get_fields(tag) {
+            for sf in field.get_subfields(sfcode) {
+                if let Some(content) = &sf.content {
+                    vec.push(content.as_str());
+                }
+            }
+        }
+        vec
     }
 }

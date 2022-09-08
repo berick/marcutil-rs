@@ -31,7 +31,7 @@ pub fn escape_xml(value: &str) -> String {
             buf.push_str("&lt;");
         } else if c > '~' {
             let ord: u32 = c.into();
-            buf.push_str(format!("&#x{:X};", ord).as_str());
+            buf.push_str(format!("&#x{ord:X};").as_str());
         } else {
             buf.push(c);
         }
@@ -61,7 +61,7 @@ impl Record {
         let file = match File::open(filename) {
             Ok(f) => f,
             Err(e) => {
-                return Err(format!("Cannot read MARCXML file: {} {}", filename, e));
+                return Err(format!("Cannot read MARCXML file: {filename} {e}"));
             }
         };
 
@@ -81,7 +81,7 @@ impl Record {
                     Record::handle_xml_read_event(&mut record, &mut context, evt)?;
                 }
                 Err(e) => {
-                    return Err(format!("Error parsing MARCXML: {}", e));
+                    return Err(format!("Error parsing MARCXML: {e}"));
                 }
             }
         }
@@ -106,7 +106,7 @@ impl Record {
                     Record::handle_xml_read_event(&mut record, &mut context, evt)?;
                 }
                 Err(e) => {
-                    return Err(format!("Error parsing MARCXML: {}", e));
+                    return Err(format!("Error parsing MARCXML: {e}"));
                 }
             }
         }
@@ -142,19 +142,14 @@ impl Record {
                 }
 
                 "datafield" => {
-                    let mut tag_added = false;
-
                     if let Some(t) = attributes
                         .iter()
                         .filter(|a| a.name.local_name.eq("tag"))
                         .next()
                     {
                         record.fields.push(Field::new(&t.value)?);
-                        tag_added = true;
-                    }
-
-                    if !tag_added {
-                        return Ok(());
+                    } else {
+                        return Err(format!("Data field has no tag"));
                     }
 
                     if let Some(ind) = attributes
