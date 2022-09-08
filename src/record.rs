@@ -12,7 +12,9 @@ pub struct Tag {
 impl Tag {
     pub fn new(tag: &str) -> Result<Self, String> {
         if tag.bytes().len() == TAG_SIZE {
-            Ok(Tag { content: tag.to_string() })
+            Ok(Tag {
+                content: tag.to_string(),
+            })
         } else {
             Err(format!("Invalid tag value: {}", tag))
         }
@@ -47,9 +49,7 @@ pub struct Subfield {
 }
 
 impl Subfield {
-
     pub fn new(code: &str) -> Result<Self, String> {
-
         if code.bytes().len() != SF_CODE_SIZE {
             return Err(format!("Invalid subfield code: {}", code));
         }
@@ -73,8 +73,8 @@ pub struct Indicator {
 
 impl Indicator {
     pub fn new(value: &str) -> Result<Self, String> {
-
-        if value.ne("") { // Empty indicator is fine
+        if value.ne("") {
+            // Empty indicator is fine
             if value.bytes().len() != INDICATOR_SIZE {
                 return Err(format!("Invalid indicator value: '{}'", value));
             }
@@ -83,7 +83,9 @@ impl Indicator {
         if value.eq("") || value.eq(" ") {
             Ok(Indicator { content: None })
         } else {
-            Ok(Indicator { content: Some(value.to_string()) })
+            Ok(Indicator {
+                content: Some(value.to_string()),
+            })
         }
     }
 }
@@ -94,7 +96,7 @@ pub struct Field {
     pub tag: Tag,
     pub ind1: Indicator,
     pub ind2: Indicator,
-    pub subfields: Vec<Subfield>
+    pub subfields: Vec<Subfield>,
 }
 
 impl Field {
@@ -103,7 +105,7 @@ impl Field {
             tag: Tag::new(tag)?,
             ind1: Indicator::new("")?,
             ind2: Indicator::new("")?,
-            subfields: Vec::new()
+            subfields: Vec::new(),
         })
     }
 
@@ -133,14 +135,15 @@ pub struct Leader {
 }
 
 impl Leader {
-
     /// Returns Err() if leader does not contain the expected number of bytes
     pub fn new(content: &str) -> Result<Self, String> {
         if content.bytes().len() != LEADER_SIZE {
             return Err(format!("Invalid leader: {}", content));
         }
 
-        Ok(Leader { content: String::from(content) })
+        Ok(Leader {
+            content: String::from(content),
+        })
     }
 }
 
@@ -153,7 +156,6 @@ pub struct Record {
 
 /// A MARC record with leader, control fields, and data fields.
 impl Record {
-
     pub fn new() -> Self {
         Record {
             leader: None,
@@ -171,4 +173,3 @@ impl Record {
         Ok(())
     }
 }
-

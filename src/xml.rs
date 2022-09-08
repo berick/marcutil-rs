@@ -1,12 +1,12 @@
-use xml::reader::{EventReader, XmlEvent};
 use std::fs::File;
 use std::io::BufReader;
+use xml::reader::{EventReader, XmlEvent};
 
+use super::Controlfield;
 use super::Field;
 use super::Indicator;
-use super::Controlfield;
-use super::Subfield;
 use super::Record;
+use super::Subfield;
 
 const MARCXML_NAMESPACE: &str = "http://www.loc.gov/MARC21/slim";
 const MARCXML_XSI_NAMESPACE: &str = "http://www.w3.org/2001/XMLSchema-instance";
@@ -56,10 +56,8 @@ impl Indicator {
 }
 
 impl Record {
-
     /// Creates a Record from an XML file
     pub fn from_xml_file(filename: &str) -> Result<Self, String> {
-
         let file = match File::open(filename) {
             Ok(f) => f,
             Err(e) => {
@@ -81,7 +79,7 @@ impl Record {
             match evt_res {
                 Ok(evt) => {
                     Record::handle_xml_read_event(&mut record, &mut context, evt)?;
-                },
+                }
                 Err(e) => {
                     return Err(format!("Error parsing MARCXML: {}", e));
                 }
@@ -106,7 +104,7 @@ impl Record {
             match evt_res {
                 Ok(evt) => {
                     Record::handle_xml_read_event(&mut record, &mut context, evt)?;
-                },
+                }
                 Err(e) => {
                     return Err(format!("Error parsing MARCXML: {}", e));
                 }
@@ -116,84 +114,96 @@ impl Record {
         Ok(record)
     }
 
-
     /// Process a single XML read event
-    fn handle_xml_read_event(record: &mut Record,
-        context: &mut ParseContext, evt: XmlEvent) -> Result<(), String> {
-
+    fn handle_xml_read_event(
+        record: &mut Record,
+        context: &mut ParseContext,
+        evt: XmlEvent,
+    ) -> Result<(), String> {
         match evt {
+            XmlEvent::StartElement {
+                name, attributes, ..
+            } => match name.local_name.as_str() {
+                "leader" => {
+                    context.in_leader = true;
+                }
 
-            XmlEvent::StartElement { name, attributes, .. } => {
-                match name.local_name.as_str() {
+                "controlfield" => {
+                    if let Some(t) = attributes
+                        .iter()
+                        .filter(|a| a.name.local_name.eq("tag"))
+                        .next()
+                    {
+                        record.control_fields.push(Controlfield::new(&t.value)?);
+                        context.in_cfield = true;
+                    } else {
+                        return Err(format!("Controlfield has no tag"));
+                    }
+                }
 
-                    "leader" => {
-                        context.in_leader = true;
-                    },
+                "datafield" => {
+                    let mut tag_added = false;
 
-                    "controlfield" => {
-                        if let Some(t) =
-                            attributes.iter().filter(|a| a.name.local_name.eq("tag")).next() {
-                            record.control_fields.push(Controlfield::new(&t.value)?);
-                            context.in_cfield = true;
+                    if let Some(t) = attributes
+                        .iter()
+                        .filter(|a| a.name.local_name.eq("tag"))
+                        .next()
+                    {
+                        record.fields.push(Field::new(&t.value)?);
+                        tag_added = true;
+                    }
 
-                        } else {
-                            return Err(format!("Controlfield has no tag"));
-                        }
-                    },
+                    if !tag_added {
+                        return Ok(());
+                    }
 
-                    "datafield" => {
-                        let mut tag_added = false;
-
-                        if let Some(t) =
-                            attributes.iter().filter(|a| a.name.local_name.eq("tag")).next() {
-                            record.fields.push(Field::new(&t.value)?);
-                            tag_added = true;
-                        }
-
-                        if !tag_added { return Ok(()); }
-
-                        if let Some(ind) =
-                            attributes.iter().filter(|a| a.name.local_name.eq("ind1")).next() {
-                            if let Some(field) = record.fields.last_mut() {
-                                field.set_ind1(&ind.value)?;
-                            }
-                        }
-
-                        if let Some(ind) =
-                            attributes.iter().filter(|a| a.name.local_name.eq("ind2")).next() {
-                            if let Some(field) = record.fields.last_mut() {
-                                field.set_ind2(&ind.value)?;
-                            }
-                        }
-                    },
-
-                    "subfield" => {
+                    if let Some(ind) = attributes
+                        .iter()
+                        .filter(|a| a.name.local_name.eq("ind1"))
+                        .next()
+                    {
                         if let Some(field) = record.fields.last_mut() {
-                            if let Some(code) =
-                                attributes.iter().filter(|a| a.name.local_name.eq("code")).next() {
-                                if let Ok(sf) = Subfield::new(&code.value) {
-                                    context.in_subfield = true;
-                                    field.subfields.push(sf);
-                                }
+                            field.set_ind1(&ind.value)?;
+                        }
+                    }
+
+                    if let Some(ind) = attributes
+                        .iter()
+                        .filter(|a| a.name.local_name.eq("ind2"))
+                        .next()
+                    {
+                        if let Some(field) = record.fields.last_mut() {
+                            field.set_ind2(&ind.value)?;
+                        }
+                    }
+                }
+
+                "subfield" => {
+                    if let Some(field) = record.fields.last_mut() {
+                        if let Some(code) = attributes
+                            .iter()
+                            .filter(|a| a.name.local_name.eq("code"))
+                            .next()
+                        {
+                            if let Ok(sf) = Subfield::new(&code.value) {
+                                context.in_subfield = true;
+                                field.subfields.push(sf);
                             }
                         }
                     }
-                    _ => {}
                 }
+                _ => {}
             },
 
             XmlEvent::Characters(ref characters) => {
-
                 if context.in_leader {
                     record.set_leader(characters)?;
                     context.in_leader = false;
-
                 } else if context.in_cfield {
                     if let Some(cf) = record.control_fields.last_mut() {
                         cf.set_content(characters);
                     }
                     context.in_cfield = false;
-
                 } else if context.in_subfield {
                     if let Some(field) = record.fields.last_mut() {
                         if let Some(subfield) = field.subfields.last_mut() {
@@ -202,7 +212,7 @@ impl Record {
                     }
                     context.in_subfield = false;
                 }
-            },
+            }
             _ => {}
         }
 
@@ -234,7 +244,10 @@ impl Record {
         // Control Fields
 
         for cfield in &self.control_fields {
-            xml += &format!(r#"<controlfield tag="{}">"#, escape_xml(&cfield.tag.content));
+            xml += &format!(
+                r#"<controlfield tag="{}">"#,
+                escape_xml(&cfield.tag.content)
+            );
             if let Some(ref c) = cfield.content {
                 xml += &escape_xml(c);
             }
@@ -244,8 +257,8 @@ impl Record {
         // Data Fields
 
         for field in &self.fields {
-
-            xml += &format!(r#"<datafield tag="{}" ind1="{}" ind2="{}">"#,
+            xml += &format!(
+                r#"<datafield tag="{}" ind1="{}" ind2="{}">"#,
                 escape_xml(&field.tag.content),
                 escape_xml(&field.ind1.to_xml()),
                 escape_xml(&field.ind2.to_xml())
@@ -269,4 +282,3 @@ impl Record {
         Ok(xml)
     }
 }
-

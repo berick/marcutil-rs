@@ -1,6 +1,6 @@
-use std::env;
 use getopts;
 use marcutil::Record;
+use std::env;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -19,8 +19,7 @@ fn main() {
 
     let filename = file_op.unwrap();
 
-    let record =
-        Record::from_xml_file(&filename).expect("MARCXML File Parse");
+    let record = Record::from_xml_file(&filename).expect("MARCXML File Parse");
 
     println!("{}", record.to_xml().expect("MARC to XML OK"));
 
@@ -31,6 +30,3 @@ fn main() {
     println!("\n{}", record2.to_breaker());
     println!("\n{}", record2.to_xml().expect("We made some xml"));
 }
-
-
-

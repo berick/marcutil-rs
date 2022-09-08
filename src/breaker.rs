@@ -1,9 +1,9 @@
+use super::Controlfield;
 use super::Field;
 use super::Indicator;
-use super::Controlfield;
-use super::Subfield;
 use super::Leader;
 use super::Record;
+use super::Subfield;
 
 const MARC_BREAKER_SF_DELIMITER: &str = "$";
 const MARC_BREAKER_SF_DELIMITER_ESCAPE: &str = "{dollar}";
@@ -18,12 +18,11 @@ pub fn unescape_from_breaker(value: &str) -> String {
     value.replace(MARC_BREAKER_SF_DELIMITER_ESCAPE, MARC_BREAKER_SF_DELIMITER)
 }
 
-
 impl Controlfield {
     pub fn to_breaker(&self) -> String {
         match &self.content {
             Some(c) => format!("{} {}", self.tag.content, escape_to_breaker(c)),
-            None => format!("{}", self.tag.content)
+            None => format!("{}", self.tag.content),
         }
     }
 }
@@ -50,15 +49,17 @@ impl Indicator {
     pub fn from_breaker(content: &str) -> Self {
         match content {
             "\\" => Indicator { content: None },
-            _ => Indicator { content: Some(content.to_string()) },
+            _ => Indicator {
+                content: Some(content.to_string()),
+            },
         }
     }
 }
 
 impl Field {
     pub fn to_breaker(&self) -> String {
-
-        let mut s = format!("{} {}{}",
+        let mut s = format!(
+            "{} {}{}",
             self.tag.content,
             self.ind1.to_breaker(),
             self.ind2.to_breaker()
@@ -79,7 +80,6 @@ impl Leader {
 }
 
 impl Record {
-
     /// Creates the MARC Breaker representation of this record as a String.
     pub fn to_breaker(&self) -> String {
         let mut s = String::from("");
@@ -101,7 +101,6 @@ impl Record {
 
     /// Creates a new MARC Record from a MARC Breaker string.
     pub fn from_breaker(breaker: &str) -> Result<Self, String> {
-
         let mut record = Record::new();
 
         for line in breaker.lines() {
@@ -115,7 +114,9 @@ impl Record {
     fn add_breaker_line(&mut self, line: &str) -> Result<(), String> {
         let len = line.len();
 
-        if len < 3 { return Ok(()); }
+        if len < 3 {
+            return Ok(());
+        }
 
         let tag = &line[..3];
 
@@ -127,7 +128,6 @@ impl Record {
         }
 
         if tag < "010" {
-
             let mut cf = Controlfield::new(tag)?;
             if len > 4 {
                 cf.set_content(unescape_from_breaker(&line[4..]).as_str());
@@ -148,7 +148,9 @@ impl Record {
 
         if len > 6 {
             for sf in line[6..].split(MARC_BREAKER_SF_DELIMITER) {
-                if sf.len() == 0 { continue; }
+                if sf.len() == 0 {
+                    continue;
+                }
                 let mut subfield = Subfield::new(&sf[..1])?;
                 if sf.len() > 1 {
                     subfield.set_content(unescape_from_breaker(&sf[1..]).as_str());
