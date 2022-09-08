@@ -6,6 +6,10 @@
 // Parse an XML string
 let record = marc::Record::from_xml(MARC_XML_STR).expect("Created record from XML");
 
+if let Some(title) = record.get_values("245", "a").first() {
+    println!("Maintitle => {title}");
+}
+
 // Turn the record into Breaker text
 let breaker = record.to_breaker();
 
