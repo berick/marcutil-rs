@@ -115,6 +115,7 @@ impl Record {
         let len = line.len();
 
         if len < 3 {
+            // Skip invalid lines
             return Ok(());
         }
 
