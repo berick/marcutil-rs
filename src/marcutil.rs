@@ -128,10 +128,46 @@ impl fmt::Display for Subfield {
 }
 
 #[derive(Debug, Clone)]
+pub struct Indicator {
+    content: Option<String>,
+}
+
+impl Indicator {
+    pub fn new(value: &str) -> Result<Self, String> {
+
+        if value.len() > 0 { // Empty indicator is fine
+            if value.bytes().len() != INDICATOR_SIZE {
+                return Err(format!("Invalid indicator value: '{}'", value));
+            }
+        }
+
+        if value.eq("") || value.eq(" ") {
+            Ok(Indicator { content: None })
+        } else {
+            Ok(Indicator { content: Some(value.to_string()) })
+        }
+    }
+
+    pub fn to_xml(&self) -> String {
+        match &self.content {
+            Some(c) => c.to_string(),
+            None => String::from(" "),
+        }
+    }
+
+    pub fn to_breaker(&self) -> String {
+        match &self.content {
+            Some(c) => c.to_string(),
+            None => String::from("\\"),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct Field {
     pub tag: String,
-    pub ind1: Option<String>,
-    pub ind2: Option<String>,
+    pub ind1: Indicator,
+    pub ind2: Indicator,
     pub subfields: Vec<Subfield>
 }
 
@@ -144,8 +180,8 @@ impl Field {
 
         Ok(Field {
             tag: tag.to_string(),
-            ind1: None,
-            ind2: None,
+            ind1: Indicator::new("")?,
+            ind2: Indicator::new("")?,
             subfields: Vec::new()
         })
     }
@@ -159,14 +195,11 @@ impl Field {
     }
 
     fn set_ind(&mut self, ind: &str, first: bool) -> Result<(), String> {
-        if ind.len() != INDICATOR_SIZE {
-            return Err(format!("Invalid indicator value: {}", ind));
-        }
+        let i = Indicator::new(ind)?;
 
-        if first {
-            self.ind1 = Some(ind.to_string());
-        } else {
-            self.ind2 = Some(ind.to_string());
+        match first {
+            true => self.ind1 = i,
+            false => self.ind2 = i,
         }
 
         Ok(())
@@ -174,17 +207,11 @@ impl Field {
 
     pub fn to_breaker(&self) -> String {
 
-        let mut s = format!("{} ", self.tag);
-
-        match &self.ind1 {
-            Some(i) => s += format!("{i}").as_str(),
-            None => s += "\\"
-        }
-
-        match &self.ind2 {
-            Some(i) => s += format!("{i}").as_str(),
-            None => s += "\\"
-        }
+        let mut s = format!("{} {}{}",
+            self.tag,
+            self.ind1.to_breaker(),
+            self.ind2.to_breaker()
+        );
 
         for sf in &self.subfields {
             s += sf.to_breaker().as_str();
@@ -210,7 +237,7 @@ impl Leader {
     /// Returns Err() if leader does not contain the expected number of bytes
     pub fn new(content: &str) -> Result<Self, String> {
 
-        if content.len() != LEADER_SIZE {
+        if content.as_bytes().len() != LEADER_SIZE {
             return Err(format!("Invalid leader: {}", content));
         }
 
@@ -243,7 +270,6 @@ pub struct Record {
 
 impl Record {
 
-    /// Returns Err() if leader is not a 24-byte string.
     pub fn new() -> Self {
         Record {
             leader: None,
@@ -252,6 +278,10 @@ impl Record {
         }
     }
 
+    /// Apply a leader value
+    ///
+    /// Returns Err if the value is not composed of the correct number
+    /// of bytes.
     pub fn set_leader(&mut self, leader: &str) -> Result<(), String> {
         self.leader = Some(Leader::new(leader)?);
         Ok(())
@@ -317,6 +347,7 @@ impl Record {
     }
 
 
+    /// Process a single XML read event
     fn handle_xml_read_event(record: &mut Record,
         context: &mut ParseContext, evt: XmlEvent) -> Result<(), String> {
 
@@ -409,7 +440,7 @@ impl Record {
     }
 
     pub fn to_xml(&self) -> Result<String, String> {
-        // We could use XmlWriter here, but turns out it's overkill and
+        // We could use XmlWriter here, but it's overkill and
         // not quite as configurable as I'd like.
 
         let mut xml = String::from(r#"<?xml version="1.0"?>"#);
@@ -443,20 +474,10 @@ impl Record {
 
         for field in &self.fields {
 
-            let ind1 = match &field.ind1 {
-                Some(ref v) => v,
-                None => ""
-            };
-
-            let ind2 = match &field.ind2 {
-                Some(ref v) => v,
-                None => ""
-            };
-
             xml += &format!(r#"<datafield tag="{}" ind1="{}" ind2="{}">"#,
                 escape_xml(&field.tag),
-                escape_xml(ind1),
-                escape_xml(ind2)
+                escape_xml(&field.ind1.to_xml()),
+                escape_xml(&field.ind2.to_xml())
             );
 
             for sf in &field.subfields {
@@ -475,84 +496,6 @@ impl Record {
         xml += "</record>";
 
         Ok(xml)
-
-        /*
-        let mut dest: Vec<u8> = Vec::new();
-        let mut writer = EmitterConfig::new().create_writer(&mut dest);
-
-        let root_event =
-            WriteEvent::start_element("record")
-            .attr("xmlns", MARCXML_NAMESPACE)
-            .attr("xmlns:xsi", MARCXML_XSI_NAMESPACE)
-            .attr("xsi:schemaLocation", MARCXML_SCHEMA_LOCATION);
-
-        writer.write(root_event);
-
-        // Leader
-        writer.write(WriteEvent::start_element("leader"));
-        if let Some(ref l) = self.leader {
-            writer.write(WriteEvent::characters(&l.content));
-        }
-        writer.write(WriteEvent::end_element());
-
-        // Controlfields
-        for cfield in &self.control_fields {
-            writer.write(
-                WriteEvent::start_element("controlfield")
-                .attr("tag", &cfield.tag)
-            );
-            if let Some(ref c) = cfield.content {
-                writer.write(WriteEvent::characters(c));
-            }
-            writer.write(WriteEvent::end_element());
-        }
-
-        for field in &self.fields {
-
-            let ind1 = match &field.ind1 {
-                Some(ref v) => v,
-                None => ""
-            };
-
-            let ind2 = match &field.ind2 {
-                Some(ref v) => v,
-                None => ""
-            };
-
-            writer.write(
-                WriteEvent::start_element("datafield")
-                .attr("tag", &field.tag)
-                .attr("ind1", ind1)
-                .attr("ind2", ind2)
-            );
-
-            for sf in &field.subfields {
-                writer.write(
-                    WriteEvent::start_element("subfield")
-                    .attr("code", &sf.code)
-                );
-
-                if let Some(ref c) = sf.content {
-                    writer.write(WriteEvent::characters(c));
-                }
-
-                // End Subfield
-                writer.write(WriteEvent::end_element());
-            }
-
-            // End Datafield
-            writer.write(WriteEvent::end_element());
-        }
-
-        // End root element
-        writer.write(WriteEvent::end_element());
-
-        match std::str::from_utf8(&dest) {
-            Ok(s) => Ok(escape_to_ascii(s)),
-            Err(e) => Err(format!(
-                "Error converting MARC bytes to string: {:?} {}", dest, e))
-        }
-        */
     }
 
     pub fn to_breaker(&self) -> String {
