@@ -15,7 +15,8 @@ const MARCXML_XSI_NAMESPACE: &str = "http://www.w3.org/2001/XMLSchema-instance";
 const MARCXML_SCHEMA_LOCATION: &str =
     "http://www.loc.gov/MARC21/slim http://www.loc.gov/standards/marcxml/schema/MARC21slim.xsd";
 
-/// Replace non-ASCII characters and special characters with escaped XML entities
+/// Replace non-ASCII characters and special characters with escaped
+/// XML entities.
 pub fn escape_xml(value: &str) -> String {
     let mut buf = String::new();
 
@@ -210,6 +211,7 @@ impl Record {
         Ok(())
     }
 
+    /// Creates the XML representation of a MARC record as a String.
     pub fn to_xml(&self) -> Result<String, String> {
         // We could use XmlWriter here, but it's overkill and
         // not quite as configurable as I'd like.

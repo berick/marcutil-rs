@@ -2,6 +2,7 @@ const TAG_SIZE: usize = 3;
 const LEADER_SIZE: usize = 24;
 const INDICATOR_SIZE: usize = 1;
 
+/// A single 3-byte tag.
 #[derive(Debug, Clone)]
 pub struct Tag {
     pub content: String,
@@ -18,6 +19,7 @@ impl Tag {
     }
 }
 
+/// MARC Control Field whose tag value is < "010"
 #[derive(Debug, Clone)]
 pub struct Controlfield {
     pub tag: Tag,
@@ -37,6 +39,7 @@ impl Controlfield {
     }
 }
 
+/// A single subfield code + value pair
 #[derive(Debug, Clone)]
 pub struct Subfield {
     pub code: String,
@@ -62,6 +65,7 @@ impl Subfield {
     }
 }
 
+/// A single 1-byte indicator value
 #[derive(Debug, Clone)]
 pub struct Indicator {
     pub content: Option<String>,
@@ -84,6 +88,7 @@ impl Indicator {
     }
 }
 
+/// A MARC Data Field with tag, indicators, and subfields.
 #[derive(Debug, Clone)]
 pub struct Field {
     pub tag: Tag,
@@ -147,6 +152,7 @@ pub struct Record {
     pub fields: Vec<Field>,
 }
 
+/// A MARC record with leader, control fields, and data fields.
 impl Record {
 
     pub fn new() -> Self {
@@ -165,6 +171,5 @@ impl Record {
         self.leader = Some(Leader::new(leader)?);
         Ok(())
     }
-
 }
 

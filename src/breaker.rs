@@ -9,10 +9,12 @@ use super::Record;
 const MARC_BREAKER_SF_DELIMITER: &str = "$";
 const MARC_BREAKER_SF_DELIMITER_ESCAPE: &str = "{dollar}";
 
+/// Replace bare subfield delimiter values with their escaped version.
 pub fn escape_to_breaker(value: &str) -> String {
     value.replace(MARC_BREAKER_SF_DELIMITER, MARC_BREAKER_SF_DELIMITER_ESCAPE)
 }
 
+/// Replace escaped subfield delimiter values with the bare version.
 pub fn unescape_from_breaker(value: &str) -> String {
     value.replace(MARC_BREAKER_SF_DELIMITER_ESCAPE, MARC_BREAKER_SF_DELIMITER)
 }
@@ -78,6 +80,8 @@ impl Leader {
 }
 
 impl Record {
+
+    /// Creates the MARC Breaker representation of this record as a String.
     pub fn to_breaker(&self) -> String {
         let mut s = String::from("");
 
@@ -96,6 +100,7 @@ impl Record {
         s
     }
 
+    /// Creates a new MARC Record from a MARC Breaker string.
     pub fn from_breaker(breaker: &str) -> Result<Self, String> {
 
         let mut record = Record::new();
