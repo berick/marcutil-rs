@@ -1,4 +1,3 @@
-use super::Tag;
 use super::Field;
 use super::Indicator;
 use super::Controlfield;

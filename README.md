@@ -22,12 +22,17 @@ println!("Generated XML: {}", xml);
 
 MARC Library for translating to/from MARC XML and MARC Breaker.
 
-Minimal requirements are placed on the validity or format of the data.
+## Data Validation
+
+Minimal requirements are placed on the validity and format of the data.
 
 1. Data must be UTF-8.
 1. Indicators and subfield codes must have a byte length of 1.
 1. Tags must have a byte length of 3.
 1. Leaders must have a byte length of 24.
+
+In cases where these conditions are not met, routines return explanatory
+Err() strings.
 
 Otherwise, no restrictions are placed on the content of the leader, 
 tag, control fields, indicators, subfield codes, or subfield values.

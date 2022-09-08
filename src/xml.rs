@@ -2,12 +2,10 @@ use xml::reader::{EventReader, XmlEvent};
 use std::fs::File;
 use std::io::BufReader;
 
-use super::Tag;
 use super::Field;
 use super::Indicator;
 use super::Controlfield;
 use super::Subfield;
-use super::Leader;
 use super::Record;
 
 const MARCXML_NAMESPACE: &str = "http://www.loc.gov/MARC21/slim";
@@ -156,21 +154,21 @@ impl Record {
 
                         if let Some(ind) =
                             attributes.iter().filter(|a| a.name.local_name.eq("ind1")).next() {
-                            if let Some(mut field) = record.fields.last_mut() {
+                            if let Some(field) = record.fields.last_mut() {
                                 field.set_ind1(&ind.value)?;
                             }
                         }
 
                         if let Some(ind) =
                             attributes.iter().filter(|a| a.name.local_name.eq("ind2")).next() {
-                            if let Some(mut field) = record.fields.last_mut() {
+                            if let Some(field) = record.fields.last_mut() {
                                 field.set_ind2(&ind.value)?;
                             }
                         }
                     },
 
                     "subfield" => {
-                        if let Some(mut field) = record.fields.last_mut() {
+                        if let Some(field) = record.fields.last_mut() {
                             if let Some(code) =
                                 attributes.iter().filter(|a| a.name.local_name.eq("code")).next() {
                                 if let Ok(sf) = Subfield::new(&code.value) {
@@ -187,18 +185,18 @@ impl Record {
             XmlEvent::Characters(ref characters) => {
 
                 if context.in_leader {
-                    record.set_leader(characters);
+                    record.set_leader(characters)?;
                     context.in_leader = false;
 
                 } else if context.in_cfield {
-                    if let Some(mut cf) = record.control_fields.last_mut() {
+                    if let Some(cf) = record.control_fields.last_mut() {
                         cf.set_content(characters);
                     }
                     context.in_cfield = false;
 
                 } else if context.in_subfield {
-                    if let Some(mut field) = record.fields.last_mut() {
-                        if let Some(mut subfield) = field.subfields.last_mut() {
+                    if let Some(field) = record.fields.last_mut() {
+                        if let Some(subfield) = field.subfields.last_mut() {
                             subfield.set_content(characters);
                         }
                     }
