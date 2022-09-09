@@ -9,3 +9,4 @@ pub use self::record::Tag;
 pub mod breaker;
 pub mod record;
 pub mod xml;
+pub mod binary;
