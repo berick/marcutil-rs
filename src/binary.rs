@@ -48,12 +48,19 @@ impl Iterator for BinaryRecordIterator {
             }
         }
 
-        println!("bytes: {:?}", bytes);
-
-        match Record::from_binary(&mut bytes) {
-            Ok(r) => Some(r),
-            _ => None
+        if bytes.len() > 0 {
+            match Record::from_binary(&bytes) {
+                Ok(r) => {
+                    return Some(r);
+                },
+                Err(e) => {
+                    eprintln!("Error processing bytes: {:?} {}", bytes, e);
+                    return None;
+                }
+            }
         }
+
+        None
     }
 }
 
@@ -72,6 +79,17 @@ impl BinaryRecordIterator {
     }
 }
 
+fn bytes_to_usize(bytes: &[u8]) -> Result<usize, String> {
+
+    if let Ok(bytes_str) = std::str::from_utf8(&bytes) {
+        if let Ok(bytes_num) = bytes_str.parse::<usize>() {
+            return Ok(bytes_num);
+        }
+    }
+
+    Err(format!("Invalid byte sequence for number: {:?}", bytes))
+}
+
 
 impl Record {
 
@@ -79,38 +97,30 @@ impl Record {
         BinaryRecordIterator::new(filename)
     }
 
-    pub fn from_binary(bytes: &mut Vec<u8>) -> Result<Record, String> {
+    pub fn from_binary(bytes: &Vec<u8>) -> Result<Record, String> {
         let mut record = Record::new();
+        let bytes = bytes.as_slice();
         let full_len = bytes.len();
 
         if full_len < RECORD_SIZE_ENTRY {
             return Err(format!("Binary record is too short"));
         }
 
-        let size_bytes: Vec<u8> = bytes.drain(0..RECORD_SIZE_ENTRY).collect();
+        let leader_bytes = &bytes[0..LEADER_SIZE];
+        let size_bytes = &leader_bytes[0..RECORD_SIZE_ENTRY];
+        let offset_bytes = &leader_bytes[12..17];
 
-        let size = match std::str::from_utf8(size_bytes.as_slice()) {
-            Ok(s) => s,
-            Err(e) => {
-                return Err(format!("Error parsing size information: {e}"));
-            }
+        let rec_size = match bytes_to_usize(&size_bytes) {
+            Ok(n) => n,
+            Err(e) => { return Err(e); }
         };
 
-        let size_num = match size.parse::<usize>() {
-            Ok(s) => s,
-            Err(e) => {
-                return Err(format!("Invalid record size: {size} {e}"));
-            }
-        };
-
-        if full_len != size_num {
+        if full_len != rec_size {
             return Err(format!(
-                "Record has incorrect size reported={} real={}", size_num, full_len));
+                "Record has incorrect size reported={} real={}", rec_size, full_len));
         }
 
-        let leader_bytes: Vec<u8> = bytes.drain(0..LEADER_SIZE).collect();
-
-        let leader = match std::str::from_utf8(leader_bytes.as_slice()) {
+        let leader = match std::str::from_utf8(&leader_bytes) {
             Ok(l) => l,
             Err(e) => {
                 return Err(format!(
@@ -120,7 +130,65 @@ impl Record {
 
         record.set_leader(&leader)?;
 
-        // Process the directory entries
+        // position 12 - 16 of the leader give offset to the body
+
+        let body_start_pos = match bytes_to_usize(offset_bytes) {
+            Ok(n) => n,
+            Err(e) => { return Err(e); }
+        };
+
+        // -1 to skip the END_OF_FIELD
+        let dir_bytes = &bytes[LEADER_SIZE..(body_start_pos - 1)];
+
+        let dir_len = dir_bytes.len();
+        if dir_len == 0 || dir_len % DIRECTORY_ENTRY_LEN != 0 {
+            return Err(format!("Invalid directory length {}", dir_len));
+        }
+
+        let dir_count = dir_bytes.len() / DIRECTORY_ENTRY_LEN;
+        let mut dir_idx = 0;
+
+        while dir_idx < dir_count {
+
+            let start = dir_idx * DIRECTORY_ENTRY_LEN;
+            let end = start + DIRECTORY_ENTRY_LEN;
+            let dir = &dir_bytes[start..end];
+
+            let dir_str = match std::str::from_utf8(dir) {
+                Ok(s) => s,
+                Err(e) => {
+                    return Err(format!("Invalid directory bytes: {:?} {}", dir, e));
+                }
+            };
+
+            // Tag is 3 chars
+            let tag = &dir_str[0..3];
+
+            // data length is 4 chars
+            let len_str = &dir_str[3..7];
+            let pos_str = &dir_str[7..12];
+
+            let len = match len_str.parse::<usize>() {
+                Ok(l) => l,
+                Err(e) => {
+                    return Err(format!(
+                        "Invalid data length value {} {}", len_str, e));
+                }
+            };
+
+            // data position is 5 chars
+            let pos = match pos_str.parse::<usize>() {
+                Ok(l) => l,
+                Err(e) => {
+                    return Err(format!(
+                        "Invalid data position value {} {}", pos_str, e));
+                }
+            };
+
+            println!("tag={tag} len={len} pos={pos}");
+
+            dir_idx += 1;
+        }
 
         Ok(record)
     }
