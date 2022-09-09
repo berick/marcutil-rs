@@ -42,8 +42,9 @@ fn main() {
 
         let mut iter = Record::from_binary_file(&bin_file_op.unwrap()).expect("Parse Binary File");
 
-        let record = iter.next();
+        let record = iter.next().unwrap();
 
-        println!("bin record: {:?}", record);
+        //println!("bin record: {:?}", record);
+        println!("Binary record as breaker:\n{}", record.to_breaker());
     }
 }

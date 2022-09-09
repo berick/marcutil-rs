@@ -1,15 +1,11 @@
 use std::fs::File;
 use std::io::prelude::*;
 use super::Record;
-/*
 use super::Controlfield;
 use super::Field;
-use super::Indicator;
-use super::Leader;
 use super::Subfield;
-*/
 
-const SUBFIELD_INDICATOR: u8 = 31; // '\x1F';
+const SUBFIELD_INDICATOR: &str = "\x1F";
 const END_OF_FIELD: u8 = 30; // '\x1E';
 const END_OF_RECORD: u8 = 29; // '\x1D';
 const DIRECTORY_ENTRY_LEN: usize = 12;
@@ -154,6 +150,8 @@ impl Record {
             let end = start + DIRECTORY_ENTRY_LEN;
             let dir = &dir_bytes[start..end];
 
+            dir_idx += 1;
+
             let dir_str = match std::str::from_utf8(dir) {
                 Ok(s) => s,
                 Err(e) => {
@@ -161,10 +159,7 @@ impl Record {
                 }
             };
 
-            // Tag is 3 chars
             let tag = &dir_str[0..3];
-
-            // data length is 4 chars
             let len_str = &dir_str[3..7];
             let pos_str = &dir_str[7..12];
 
@@ -176,7 +171,6 @@ impl Record {
                 }
             };
 
-            // data position is 5 chars
             let pos = match pos_str.parse::<usize>() {
                 Ok(l) => l,
                 Err(e) => {
@@ -185,9 +179,45 @@ impl Record {
                 }
             };
 
-            println!("tag={tag} len={len} pos={pos}");
+            if (pos + len) > full_len {
+                return Err(format!("Field length exceeds length of record for tag={tag}"));
+            }
 
-            dir_idx += 1;
+            let dstart = body_start_pos + pos;
+            let dend = dstart + len - 1; // Drop trailing END_OF_FIELD
+            let field_bytes = &bytes[dstart..dend];
+            let field_str = match std::str::from_utf8(&field_bytes) {
+                Ok(s) => s,
+                Err(e) => {
+                    return Err(format!(
+                        "Field data is not UTF8 compatible: {:?} {}", field_bytes, e));
+                }
+            };
+
+            if tag < "010" {
+                let mut cf = Controlfield::new(tag)?;
+                if field_str.len() > 0 {
+                    cf.set_content(&field_str);
+                }
+                record.control_fields.push(cf);
+                continue;
+            }
+
+            let mut field = Field::new(tag).unwrap(); // tag char count is known good
+            field.set_ind1(&field_str[..1]).unwrap(); // ind char count is known good
+            field.set_ind2(&field_str[1..2]).unwrap(); // ind char count is known good
+
+            let field_parts: Vec<&str> = field_str.split(SUBFIELD_INDICATOR).collect();
+
+            for part in &field_parts[1..] {
+                let mut sf = Subfield::new(&part[..1]).unwrap(); // code size is known good
+                if part.len() > 1 {
+                    sf.set_content(&part[1..]);
+                }
+                field.subfields.push(sf);
+            }
+
+            record.fields.push(field);
         }
 
         Ok(record)
