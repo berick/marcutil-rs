@@ -24,6 +24,12 @@ let record2 = Record::from_breaker(&breaker).expect("Built from breaker");
 let xml = record2.to_xml().expect("To XML");
 
 println!("Generated XML: {xml}");
+
+// Binary file reading
+for rec in Record::from_binary_file(MARC_FILENAME).expect("Start Binary Fiel") {
+    println!("\nBinary record as xml:\n{}", rec.to_xml_formatted().unwrap());
+} 
+
 ```
 
 ## About
@@ -39,8 +45,9 @@ Minimal requirements are placed on the validity and format of the data.
 1. Tags must have a byte length of 3.
 1. Leaders must have a byte length of 24.
 1. Control fields and data fields must have a tag.
+1. Binary leader/directory metadata must be sane.
 
-In cases where these conditions are not met, routines return explanatory
-Err() strings.
+In cases where these conditions are not met, routines exit early with
+explanatory Err() strings.
 
 Otherwise, no restrictions are placed on the data values.

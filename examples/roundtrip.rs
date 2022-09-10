@@ -40,12 +40,8 @@ fn main() {
 
     if bin_file_op.is_some() {
 
-        let mut iter = Record::from_binary_file(&bin_file_op.unwrap()).expect("Parse Binary File");
-
-        let record = iter.next().unwrap();
-
-        //println!("bin record: {:?}", record);
-        println!("Binary record as breaker:\n{}", record.to_breaker());
-        println!("\nBinary record as xml:\n{}", record.to_xml_formatted().unwrap());
+        for record in Record::from_binary_file(&bin_file_op.unwrap()).expect("Start Binary File") {
+            println!("\nBinary record as xml:\n{}", record.to_xml_formatted().unwrap());
+        }
     }
 }

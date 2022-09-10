@@ -5,13 +5,17 @@ use super::Controlfield;
 use super::Field;
 use super::Subfield;
 
-const SUBFIELD_SEPARATOR: &str = "\x1F";
 const _END_OF_FIELD: u8 = 30; // '\x1E';
 const END_OF_RECORD: u8 = 29; // '\x1D';
-const DIRECTORY_ENTRY_LEN: usize = 12;
 const RECORD_SIZE_ENTRY: usize = 5;
 const LEADER_SIZE: usize = 24;
+const DATA_OFFSET_START: usize = 12;
+const DATA_OFFSET_SIZE: usize = 5;
+const DIRECTORY_ENTRY_LEN: usize = 12;
+const SUBFIELD_SEPARATOR: &str = "\x1F";
 
+/// Iterates over a binary MARC file and emits MARC Records as they are
+/// pulled  from the file.
 pub struct BinaryRecordIterator {
     file: File,
 }
@@ -24,7 +28,7 @@ impl Iterator for BinaryRecordIterator {
 
         loop {
             // Read bytes from the file until we hit an END_OF_RECORD byte.
-            // Pass the read bytes to the Record binary data reader.
+            // Pass the read bytes to the Record binary data parser.
 
             let mut buf: [u8; 1] = [0];
             match self.file.read(&mut buf) {
@@ -85,7 +89,8 @@ fn bytes_to_usize(bytes: &[u8]) -> Result<usize, String> {
         Ok(bytes_str) => {
             match bytes_str.parse::<usize>() {
                 Ok(num) => Ok(num),
-                Err(e) => Err(format!("Error translating string to usize str={bytes_str} {e}"))
+                Err(e) => Err(format!(
+                    "Error translating string to usize str={bytes_str} {e}"))
             }
         },
         Err(e) => Err(format!("Error translating bytes to string: {bytes:?} {e}"))
@@ -95,10 +100,24 @@ fn bytes_to_usize(bytes: &[u8]) -> Result<usize, String> {
 impl Record {
     // Lets add some binary MARC data handling
 
+    // Creates a Record from a MARC binary data file.
     pub fn from_binary_file(filename: &str) -> Result<BinaryRecordIterator, String> {
         BinaryRecordIterator::new(filename)
     }
 
+    /// Creates a Rrecord from MARC binary data.
+    //
+    // https://www.loc.gov/marc/bibliographic/bdleader.html
+    // 24-byte leader
+    //   5-byte record length
+    //   other stuff
+    //   5-byte data start index
+    //   other stuff
+    //
+    // https://www.loc.gov/marc/bibliographic/bddirectory.html
+    // 12-byte field directory entries
+    //
+    // Control fields and data fields.
     pub fn from_binary(bytes: &Vec<u8>) -> Result<Record, String> {
         let mut record = Record::new();
 
@@ -115,7 +134,8 @@ impl Record {
         let size_bytes = &leader_bytes[0..RECORD_SIZE_ENTRY];
 
         // Where in this pile of bytes do the control/data fields tart.
-        let data_offset_bytes = &leader_bytes[12..17];
+        let data_offset_bytes =
+            &leader_bytes[DATA_OFFSET_START..(DATA_OFFSET_START + DATA_OFFSET_SIZE)];
 
         let rec_size = match bytes_to_usize(&size_bytes) {
             Ok(n) => n,
@@ -168,6 +188,8 @@ impl Record {
 
     /// Unpack a single control field / data field and append to the
     /// record in progress.
+    //
+    // https://www.loc.gov/marc/bibliographic/bddirectory.html
     fn process_directory_entry(
         &mut self,
         rec_bytes: &[u8],
