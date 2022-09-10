@@ -279,6 +279,20 @@ impl Record {
 
         Ok(())
     }
+
+    pub fn to_binary(&self) -> Result<Vec<u8>, String> {
+
+        // It's technically possible for a Record to have no leader.
+        // Build one if necessary.
+        let mut bytes: Vec<u8> = match &self.leader {
+            Some(l) => l.content.as_bytes().to_vec(),
+            None => (0..LEADER_SIZE).map(|_| '0' as u8).collect::<Vec<u8>>()
+        };
+
+        let field_count = self.control_fields.len() + self.fields.len();
+
+        Ok(bytes)
+    }
 }
 
 

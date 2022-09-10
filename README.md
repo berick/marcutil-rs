@@ -1,4 +1,4 @@
-# Rust MARC XML / Breaker Library
+# Rust MARC XML / Breaker / Binary Library
 
 ## Synopsis
 
