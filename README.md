@@ -26,7 +26,7 @@ let xml = record2.to_xml().expect("To XML");
 println!("Generated XML: {xml}");
 
 // Binary file reading
-for rec in Record::from_binary_file(MARC_FILENAME).expect("Start Binary Fiel") {
+for rec in Record::from_binary_file(MARC_FILENAME).expect("Start Binary File") {
     println!("\nBinary record as xml:\n{}", rec.to_xml_formatted().unwrap());
 } 
 
