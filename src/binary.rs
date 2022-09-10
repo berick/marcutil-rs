@@ -97,8 +97,61 @@ fn bytes_to_usize(bytes: &[u8]) -> Result<usize, String> {
     }
 }
 
+pub struct DirectoryEntry {
+    tag: String,
+    field_start_idx: usize,
+    field_end_idx: usize,
+}
+
+impl DirectoryEntry {
+
+    /// 'which' 12-byte entry out of the directory as a whole, zero-based.
+    pub fn new(which: usize, data_start_idx: usize, dir_bytes: &[u8]) -> Result<Self, String> {
+
+        let start = which * DIRECTORY_ENTRY_LEN;
+        let end = start + DIRECTORY_ENTRY_LEN;
+        let bytes = &dir_bytes[start..end];
+
+        let entry_str = match std::str::from_utf8(bytes) {
+            Ok(s) => s,
+            Err(e) => {
+                return Err(format!("Invalid directory bytes: {:?} {}", bytes, e));
+            }
+        };
+
+        let field_tag = &entry_str[0..3];
+        let field_len_str = &entry_str[3..7];
+        let field_pos_str = &entry_str[7..12];
+
+        let field_len = match field_len_str.parse::<usize>() {
+            Ok(l) => l,
+            Err(e) => {
+                return Err(format!(
+                    "Invalid data length value {} {}", field_len_str, e));
+            }
+        };
+
+        // Where does this field start in the record as a whole
+        let field_start_idx = match field_pos_str.parse::<usize>() {
+            Ok(l) => l,
+            Err(e) => {
+                return Err(format!(
+                    "Invalid data position value {} {}", field_pos_str, e));
+            }
+        };
+
+        let start = field_start_idx + data_start_idx;
+        let last = start + field_len - 1; // Discard END_OF_FIELD char
+
+        Ok(DirectoryEntry {
+            tag: field_tag.to_string(),
+            field_start_idx: start,
+            field_end_idx: last
+        })
+    }
+}
+
 impl Record {
-    // Lets add some binary MARC data handling
 
     // Creates a Record from a MARC binary data file.
     pub fn from_binary_file(filename: &str) -> Result<BinaryRecordIterator, String> {
@@ -167,14 +220,10 @@ impl Record {
 
         while dir_idx < dir_count {
 
+            let dir_entry = DirectoryEntry::new(dir_idx, data_start_idx, &dir_bytes)?;
+
             if let Err(e) =
-                record.process_directory_entry(
-                    &rec_bytes,
-                    &dir_bytes,
-                    dir_idx,
-                    data_start_idx,
-                    rec_byte_count)
-                {
+                record.process_directory_entry(&rec_bytes, &dir_entry, rec_byte_count) {
                 return Err(format!(
                     "Error processing directory entry index={} {}", dir_idx, e));
             }
@@ -193,51 +242,16 @@ impl Record {
     fn process_directory_entry(
         &mut self,
         rec_bytes: &[u8],
-        dir_bytes: &[u8],
-        dir_idx: usize,
-        data_start_idx: usize,
+        dir_entry: &DirectoryEntry,
         rec_byte_count: usize,
     ) -> Result<(), String> {
 
-        let start = dir_idx * DIRECTORY_ENTRY_LEN;
-        let end = start + DIRECTORY_ENTRY_LEN;
-        let dir = &dir_bytes[start..end];
-
-        let dir_str = match std::str::from_utf8(dir) {
-            Ok(s) => s,
-            Err(e) => {
-                return Err(format!("Invalid directory bytes: {:?} {}", dir, e));
-            }
-        };
-
-        let field_tag = &dir_str[0..3];
-        let field_len_str = &dir_str[3..7];
-        let field_pos_str = &dir_str[7..12];
-
-        let field_len = match field_len_str.parse::<usize>() {
-            Ok(l) => l,
-            Err(e) => {
-                return Err(format!(
-                    "Invalid data length value {} {}", field_len_str, e));
-            }
-        };
-
-        // Where does this field start in the record as a whole
-        let field_start_idx = match field_pos_str.parse::<usize>() {
-            Ok(l) => l,
-            Err(e) => {
-                return Err(format!(
-                    "Invalid data position value {} {}", field_pos_str, e));
-            }
-        };
-
-        if (field_start_idx + field_len) > rec_byte_count {
-            return Err(format!("Field length exceeds length of record for tag={field_tag}"));
+        if (dir_entry.field_end_idx) >= rec_byte_count {
+            return Err(format!(
+                "Field length exceeds length of record for tag={}", dir_entry.tag));
         }
 
-        let field_start = field_start_idx + data_start_idx;
-        let field_end = field_start + field_len - 1; // Discard trailing END_OF_FIELD
-        let field_bytes = &rec_bytes[field_start..field_end];
+        let field_bytes = &rec_bytes[dir_entry.field_start_idx..dir_entry.field_end_idx];
 
         let field_str = match std::str::from_utf8(&field_bytes) {
             Ok(s) => s,
@@ -247,8 +261,8 @@ impl Record {
             }
         };
 
-        if field_tag < "010" { // Control field
-            let mut cf = Controlfield::new(field_tag)?;
+        if dir_entry.tag.as_str() < "010" { // Control field
+            let mut cf = Controlfield::new(&dir_entry.tag)?;
             if field_str.len() > 0 {
                 cf.set_content(&field_str);
             }
@@ -259,7 +273,7 @@ impl Record {
         // 3-bytes for tag
         // 1 byte for indicator 1
         // 1 byte for indicator 2
-        let mut field = Field::new(field_tag).unwrap(); // tag char count is known good
+        let mut field = Field::new(&dir_entry.tag).unwrap(); // tag char count is known good
         field.set_ind1(&field_str[..1]).unwrap(); // ind char count is known good
         field.set_ind2(&field_str[1..2]).unwrap(); // ind char count is known good
 
