@@ -5,8 +5,8 @@ use super::Controlfield;
 use super::Field;
 use super::Subfield;
 
-const SUBFIELD_INDICATOR: &str = "\x1F";
-const END_OF_FIELD: u8 = 30; // '\x1E';
+const SUBFIELD_SEPARATOR: &str = "\x1F";
+const _END_OF_FIELD: u8 = 30; // '\x1E';
 const END_OF_RECORD: u8 = 29; // '\x1D';
 const DIRECTORY_ENTRY_LEN: usize = 12;
 const RECORD_SIZE_ENTRY: usize = 5;
@@ -23,6 +23,9 @@ impl Iterator for BinaryRecordIterator {
         let mut bytes: Vec<u8> = Vec::new();
 
         loop {
+            // Read bytes from the file until we hit an END_OF_RECORD byte.
+            // Pass the read bytes to the Record binary data reader.
+
             let mut buf: [u8; 1] = [0];
             match self.file.read(&mut buf) {
                 Ok(count) => {
@@ -75,19 +78,22 @@ impl BinaryRecordIterator {
     }
 }
 
+/// bytes => String => usize
 fn bytes_to_usize(bytes: &[u8]) -> Result<usize, String> {
 
-    if let Ok(bytes_str) = std::str::from_utf8(&bytes) {
-        if let Ok(bytes_num) = bytes_str.parse::<usize>() {
-            return Ok(bytes_num);
-        }
+    match std::str::from_utf8(&bytes) {
+        Ok(bytes_str) => {
+            match bytes_str.parse::<usize>() {
+                Ok(num) => Ok(num),
+                Err(e) => Err(format!("Error translating string to usize str={bytes_str} {e}"))
+            }
+        },
+        Err(e) => Err(format!("Error translating bytes to string: {bytes:?} {e}"))
     }
-
-    Err(format!("Invalid byte sequence for number: {:?}", bytes))
 }
 
-
 impl Record {
+    // Lets add some binary MARC data handling
 
     pub fn from_binary_file(filename: &str) -> Result<BinaryRecordIterator, String> {
         BinaryRecordIterator::new(filename)
@@ -95,46 +101,41 @@ impl Record {
 
     pub fn from_binary(bytes: &Vec<u8>) -> Result<Record, String> {
         let mut record = Record::new();
-        let bytes = bytes.as_slice();
-        let full_len = bytes.len();
 
-        if full_len < RECORD_SIZE_ENTRY {
+        let rec_bytes = bytes.as_slice();
+        let rec_byte_count = rec_bytes.len();
+
+        if rec_byte_count < RECORD_SIZE_ENTRY {
             return Err(format!("Binary record is too short"));
         }
 
-        let leader_bytes = &bytes[0..LEADER_SIZE];
+        let leader_bytes = &rec_bytes[0..LEADER_SIZE];
+
+        // Reported size of the record
         let size_bytes = &leader_bytes[0..RECORD_SIZE_ENTRY];
-        let offset_bytes = &leader_bytes[12..17];
+
+        // Where in this pile of bytes do the control/data fields tart.
+        let data_offset_bytes = &leader_bytes[12..17];
 
         let rec_size = match bytes_to_usize(&size_bytes) {
             Ok(n) => n,
             Err(e) => { return Err(e); }
         };
 
-        if full_len != rec_size {
+        if rec_byte_count != rec_size {
             return Err(format!(
-                "Record has incorrect size reported={} real={}", rec_size, full_len));
+                "Record has incorrect size reported={} real={}", rec_size, rec_byte_count));
         }
 
-        let leader = match std::str::from_utf8(&leader_bytes) {
-            Ok(l) => l,
-            Err(e) => {
-                return Err(format!(
-                    "Leader value is not UTF8 compatible {:?} {}", leader_bytes, e));
-            }
-        };
+        record.set_leader_bytes(&leader_bytes)?;
 
-        record.set_leader(&leader)?;
-
-        // position 12 - 16 of the leader give offset to the body
-
-        let body_start_pos = match bytes_to_usize(offset_bytes) {
+        let data_start_idx = match bytes_to_usize(data_offset_bytes) {
             Ok(n) => n,
             Err(e) => { return Err(e); }
         };
 
         // -1 to skip the END_OF_FIELD
-        let dir_bytes = &bytes[LEADER_SIZE..(body_start_pos - 1)];
+        let dir_bytes = &rec_bytes[LEADER_SIZE..(data_start_idx - 1)];
 
         let dir_len = dir_bytes.len();
         if dir_len == 0 || dir_len % DIRECTORY_ENTRY_LEN != 0 {
@@ -146,81 +147,115 @@ impl Record {
 
         while dir_idx < dir_count {
 
-            let start = dir_idx * DIRECTORY_ENTRY_LEN;
-            let end = start + DIRECTORY_ENTRY_LEN;
-            let dir = &dir_bytes[start..end];
+            if let Err(e) =
+                record.process_directory_entry(
+                    &rec_bytes,
+                    &dir_bytes,
+                    dir_idx,
+                    data_start_idx,
+                    rec_byte_count)
+                {
+                return Err(format!(
+                    "Error processing directory entry index={} {}", dir_idx, e));
+            }
 
             dir_idx += 1;
-
-            let dir_str = match std::str::from_utf8(dir) {
-                Ok(s) => s,
-                Err(e) => {
-                    return Err(format!("Invalid directory bytes: {:?} {}", dir, e));
-                }
-            };
-
-            let tag = &dir_str[0..3];
-            let len_str = &dir_str[3..7];
-            let pos_str = &dir_str[7..12];
-
-            let len = match len_str.parse::<usize>() {
-                Ok(l) => l,
-                Err(e) => {
-                    return Err(format!(
-                        "Invalid data length value {} {}", len_str, e));
-                }
-            };
-
-            let pos = match pos_str.parse::<usize>() {
-                Ok(l) => l,
-                Err(e) => {
-                    return Err(format!(
-                        "Invalid data position value {} {}", pos_str, e));
-                }
-            };
-
-            if (pos + len) > full_len {
-                return Err(format!("Field length exceeds length of record for tag={tag}"));
-            }
-
-            let dstart = body_start_pos + pos;
-            let dend = dstart + len - 1; // Drop trailing END_OF_FIELD
-            let field_bytes = &bytes[dstart..dend];
-            let field_str = match std::str::from_utf8(&field_bytes) {
-                Ok(s) => s,
-                Err(e) => {
-                    return Err(format!(
-                        "Field data is not UTF8 compatible: {:?} {}", field_bytes, e));
-                }
-            };
-
-            if tag < "010" {
-                let mut cf = Controlfield::new(tag)?;
-                if field_str.len() > 0 {
-                    cf.set_content(&field_str);
-                }
-                record.control_fields.push(cf);
-                continue;
-            }
-
-            let mut field = Field::new(tag).unwrap(); // tag char count is known good
-            field.set_ind1(&field_str[..1]).unwrap(); // ind char count is known good
-            field.set_ind2(&field_str[1..2]).unwrap(); // ind char count is known good
-
-            let field_parts: Vec<&str> = field_str.split(SUBFIELD_INDICATOR).collect();
-
-            for part in &field_parts[1..] {
-                let mut sf = Subfield::new(&part[..1]).unwrap(); // code size is known good
-                if part.len() > 1 {
-                    sf.set_content(&part[1..]);
-                }
-                field.subfields.push(sf);
-            }
-
-            record.fields.push(field);
         }
 
         Ok(record)
+    }
+
+
+    /// Unpack a single control field / data field and append to the
+    /// record in progress.
+    fn process_directory_entry(
+        &mut self,
+        rec_bytes: &[u8],
+        dir_bytes: &[u8],
+        dir_idx: usize,
+        data_start_idx: usize,
+        rec_byte_count: usize,
+    ) -> Result<(), String> {
+
+        let start = dir_idx * DIRECTORY_ENTRY_LEN;
+        let end = start + DIRECTORY_ENTRY_LEN;
+        let dir = &dir_bytes[start..end];
+
+        let dir_str = match std::str::from_utf8(dir) {
+            Ok(s) => s,
+            Err(e) => {
+                return Err(format!("Invalid directory bytes: {:?} {}", dir, e));
+            }
+        };
+
+        let field_tag = &dir_str[0..3];
+        let field_len_str = &dir_str[3..7];
+        let field_pos_str = &dir_str[7..12];
+
+        let field_len = match field_len_str.parse::<usize>() {
+            Ok(l) => l,
+            Err(e) => {
+                return Err(format!(
+                    "Invalid data length value {} {}", field_len_str, e));
+            }
+        };
+
+        // Where does this field start in the record as a whole
+        let field_start_idx = match field_pos_str.parse::<usize>() {
+            Ok(l) => l,
+            Err(e) => {
+                return Err(format!(
+                    "Invalid data position value {} {}", field_pos_str, e));
+            }
+        };
+
+        if (field_start_idx + field_len) > rec_byte_count {
+            return Err(format!("Field length exceeds length of record for tag={field_tag}"));
+        }
+
+        let field_start = field_start_idx + data_start_idx;
+        let field_end = field_start + field_len - 1; // Discard trailing END_OF_FIELD
+        let field_bytes = &rec_bytes[field_start..field_end];
+
+        let field_str = match std::str::from_utf8(&field_bytes) {
+            Ok(s) => s,
+            Err(e) => {
+                return Err(format!(
+                    "Field data is not UTF8 compatible: {:?} {}", field_bytes, e));
+            }
+        };
+
+        if field_tag < "010" { // Control field
+            let mut cf = Controlfield::new(field_tag)?;
+            if field_str.len() > 0 {
+                cf.set_content(&field_str);
+            }
+            self.control_fields.push(cf);
+            return Ok(());
+        }
+
+        // 3-bytes for tag
+        // 1 byte for indicator 1
+        // 1 byte for indicator 2
+        let mut field = Field::new(field_tag).unwrap(); // tag char count is known good
+        field.set_ind1(&field_str[..1]).unwrap(); // ind char count is known good
+        field.set_ind2(&field_str[1..2]).unwrap(); // ind char count is known good
+
+        // Split the remainder on the subfield separator and
+        // build Field's from them.
+        let field_parts: Vec<&str> = field_str.split(SUBFIELD_SEPARATOR).collect();
+
+        for part in &field_parts[1..] { // skip the initial SUBFIELD_SEPARATOR
+            let mut sf = Subfield::new(&part[..1]).unwrap(); // code size is known good
+            if part.len() > 1 {
+                sf.set_content(&part[1..]);
+            }
+            field.subfields.push(sf);
+        }
+
+        self.fields.push(field);
+
+        Ok(())
     }
 }
 

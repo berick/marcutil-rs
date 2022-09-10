@@ -1,3 +1,9 @@
+///! Models a MARC record with associated components.
+
+// Much of the MARC data that could be stored as bytes (e.g. leader,
+// indicators) is stored as Strings instead.  I chose Strings since they
+// are easier to work with for the library user and in most cases the
+// data would have to be stringified anyway to make sense of it.
 const TAG_SIZE: usize = 3;
 const LEADER_SIZE: usize = 24;
 const INDICATOR_SIZE: usize = 1;
@@ -167,13 +173,27 @@ impl Record {
         }
     }
 
-    /// Apply a leader value
+    /// Apply a leader value from a str
     ///
     /// Returns Err if the value is not composed of the correct number
     /// of bytes.
     pub fn set_leader(&mut self, leader: &str) -> Result<(), String> {
         self.leader = Some(Leader::new(leader)?);
         Ok(())
+    }
+
+    /// Apply a leader value from a str
+    ///
+    /// Returns Err if the value is not composed of the correct number
+    /// of bytes.
+    pub fn set_leader_bytes(&mut self, bytes: &[u8]) -> Result<(), String> {
+        match std::str::from_utf8(bytes) {
+            Ok(leader) => {
+                self.leader = Some(Leader::new(leader)?);
+                return Ok(());
+            }
+            Err(e) => Err(format!("Cannot translate leader to UTF-8 {:?} {}", bytes, e)),
+        }
     }
 
     pub fn get_control_fields(&self, tag: &str) -> Vec<&Controlfield> {

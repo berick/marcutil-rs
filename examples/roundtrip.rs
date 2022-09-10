@@ -46,5 +46,6 @@ fn main() {
 
         //println!("bin record: {:?}", record);
         println!("Binary record as breaker:\n{}", record.to_breaker());
+        println!("\nBinary record as xml:\n{}", record.to_xml_formatted().unwrap());
     }
 }

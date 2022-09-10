@@ -48,7 +48,7 @@ fn format(formatted: bool, value: &mut String, depth: u8) {
     }
 }
 
-struct ParseContext {
+struct XmlParseContext {
     in_cfield: bool,
     in_subfield: bool,
     in_leader: bool,
@@ -77,7 +77,7 @@ impl Record {
         let parser = EventReader::new(file);
         let mut record = Record::new();
 
-        let mut context = ParseContext {
+        let mut context = XmlParseContext {
             in_cfield: false,
             in_subfield: false,
             in_leader: false,
@@ -102,7 +102,7 @@ impl Record {
         let parser = EventReader::new(xml.as_bytes());
         let mut record = Record::new();
 
-        let mut context = ParseContext {
+        let mut context = XmlParseContext {
             in_cfield: false,
             in_subfield: false,
             in_leader: false,
@@ -125,7 +125,7 @@ impl Record {
     /// Process a single XML read event
     fn handle_xml_read_event(
         record: &mut Record,
-        context: &mut ParseContext,
+        context: &mut XmlParseContext,
         evt: XmlEvent,
     ) -> Result<(), String> {
         match evt {
