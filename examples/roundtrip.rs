@@ -23,6 +23,7 @@ fn main() {
         if let Some(title) = record.get_values("245", "a").first() {
             println!("Maintitle => {title}");
         }
+        /*
 
         println!("{}", record.to_xml().expect("MARC to XML OK"));
 
@@ -36,6 +37,9 @@ fn main() {
             "\n{}",
             record2.to_xml_formatted().expect("We made some xml")
         );
+        */
+
+        let bytes = record.to_binary().expect("To Binary");
     }
 
     if bin_file_op.is_some() {

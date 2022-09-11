@@ -11,6 +11,7 @@ const RECORD_SIZE_ENTRY: usize = 5;
 const LEADER_SIZE: usize = 24;
 const DATA_OFFSET_START: usize = 12;
 const DATA_OFFSET_SIZE: usize = 5;
+const DATA_LENGTH_SIZE: usize = 4;
 const DIRECTORY_ENTRY_LEN: usize = 12;
 const SUBFIELD_SEPARATOR: &str = "\x1F";
 
@@ -296,14 +297,39 @@ impl Record {
 
     pub fn to_binary(&self) -> Result<Vec<u8>, String> {
 
-        // It's technically possible for a Record to have no leader.
-        // Build one if necessary.
+        // Build a leader from scratch if necessary.
         let mut bytes: Vec<u8> = match &self.leader {
             Some(l) => l.content.as_bytes().to_vec(),
             None => (0..LEADER_SIZE).map(|_| '0' as u8).collect::<Vec<u8>>()
         };
 
-        let field_count = self.control_fields.len() + self.fields.len();
+        let mut prev_end_idx = 0;
+        for field in &self.control_fields {
+
+            let field_bytes = match &field.content {
+                Some(c) => c.as_bytes(),
+                None => "".as_bytes(),
+            };
+
+            let field_len = field_bytes.len() + 1; // + field terminator
+            let field_start = prev_end_idx;
+
+            // Our directory entry as a string.
+            let s = format!("{}{:0w1$}{:0w2$}",
+                field.tag.content,
+                field_len,
+                field_start,
+                w1 = DATA_LENGTH_SIZE,
+                w2 = DATA_OFFSET_SIZE
+            );
+
+            bytes.append(&mut s.as_bytes().to_vec());
+
+            prev_end_idx = prev_end_idx + field_len;
+        }
+
+        for field in &self.fields {
+        }
 
         Ok(bytes)
     }
