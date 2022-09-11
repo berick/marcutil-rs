@@ -306,19 +306,18 @@ impl Record {
         let mut prev_end_idx = 0;
         for field in &self.control_fields {
 
-            let field_bytes = match &field.content {
-                Some(c) => c.as_bytes(),
-                None => "".as_bytes(),
+            let mut field_len = match &field.content {
+                Some(c) => c.as_bytes().len(),
+                None => 0
             };
 
-            let field_len = field_bytes.len() + 1; // + field terminator
-            let field_start = prev_end_idx;
+            field_len += 1; // end of field terminator
 
             // Our directory entry as a string.
             let s = format!("{}{:0w1$}{:0w2$}",
                 field.tag.content,
                 field_len,
-                field_start,
+                prev_end_idx, // our starting point
                 w1 = DATA_LENGTH_SIZE,
                 w2 = DATA_OFFSET_SIZE
             );
@@ -329,6 +328,28 @@ impl Record {
         }
 
         for field in &self.fields {
+
+            let mut field_len = 3; // ind1 + ind2 + field terminator
+            for sf in &field.subfields {
+                field_len += 2; // sf code + separator
+                field_len += match &sf.content {
+                    Some(c) => c.as_bytes().len(),
+                    None => 0
+                }
+            }
+
+            // Our directory entry as a string.
+            let s = format!("{}{:0w1$}{:0w2$}",
+                field.tag.content,
+                field_len,
+                prev_end_idx, // our starting point
+                w1 = DATA_LENGTH_SIZE,
+                w2 = DATA_OFFSET_SIZE
+            );
+
+            bytes.append(&mut s.as_bytes().to_vec());
+
+            prev_end_idx = prev_end_idx + field_len;
         }
 
         Ok(bytes)
