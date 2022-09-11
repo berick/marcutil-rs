@@ -20,6 +20,7 @@ fn main() {
 
         let mut record = Record::from_xml_file(&xml_filename).expect("MARCXML File Parse");
 
+        /*
         if let Some(title) = record.get_values("245", "a").first() {
             println!("Maintitle => {title}");
         }
@@ -34,7 +35,6 @@ fn main() {
             println!("New Maintitle => {title}");
         }
 
-        /*
 
         println!("{}", record.to_xml().expect("MARC to XML OK"));
 
@@ -51,6 +51,8 @@ fn main() {
         */
 
         let bytes = record.to_binary().expect("To Binary");
+
+        println!("{}", std::str::from_utf8(&bytes).unwrap());
     }
 
     if bin_file_op.is_some() {

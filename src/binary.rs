@@ -5,7 +5,7 @@ use super::Controlfield;
 use super::Field;
 use super::Subfield;
 
-const _END_OF_FIELD: u8 = 30; // '\x1E';
+const END_OF_FIELD: &str = "\x1E";
 const END_OF_RECORD: u8 = 29; // '\x1D';
 const RECORD_SIZE_ENTRY: usize = 5;
 const LEADER_SIZE: usize = 24;
@@ -178,8 +178,8 @@ impl Record {
         let rec_bytes = bytes.as_slice();
         let rec_byte_count = rec_bytes.len();
 
-        if rec_byte_count < RECORD_SIZE_ENTRY {
-            return Err(format!("Binary record is too short"));
+        if rec_byte_count < LEADER_SIZE {
+            return Err(format!("Binary record is too short: {:?}", bytes));
         }
 
         let leader_bytes = &rec_bytes[0..LEADER_SIZE];
@@ -350,6 +350,46 @@ impl Record {
             bytes.append(&mut s.as_bytes().to_vec());
 
             prev_end_idx = prev_end_idx + field_len;
+        }
+
+        bytes.append(&mut END_OF_FIELD.as_bytes().to_vec());
+
+        // Now append the actual data
+        for field in &self.control_fields {
+            if let Some(c) = &field.content {
+                bytes.append(&mut c.as_bytes().to_vec());
+            }
+            bytes.append(&mut END_OF_FIELD.as_bytes().to_vec());
+        }
+
+        for field in &self.fields {
+
+            let s = format!("{}{}",
+                match &field.ind1.content { Some(i) => i, _ => " " },
+                match &field.ind2.content { Some(i) => i, _ => " " }
+            );
+
+            bytes.append(&mut s.as_bytes().to_vec());
+
+            for sf in &field.subfields {
+                let s = format!("{}{}{}",
+                    SUBFIELD_SEPARATOR,
+                    sf.code,
+                    match &sf.content { Some(c) => c.as_str(), None => "" }
+                );
+                bytes.append(&mut s.as_bytes().to_vec());
+            }
+            bytes.append(&mut END_OF_FIELD.as_bytes().to_vec());
+        }
+
+        bytes.append(&mut vec![END_OF_RECORD]);
+
+        // Set the byte count of the record in the leader
+        let size_str = format!("{:0w$}", bytes.len(), w = RECORD_SIZE_ENTRY);
+        let size_bytes = size_str.as_bytes();
+
+        for idx in (0..RECORD_SIZE_ENTRY) {
+            bytes[idx] = size_bytes[idx];
         }
 
         Ok(bytes)
