@@ -297,14 +297,46 @@ impl Record {
 
     pub fn to_binary(&self) -> Result<Vec<u8>, String> {
 
-        // Build a leader from scratch if necessary.
-        let mut bytes: Vec<u8> = match &self.leader {
+        let mut bytes: Vec<u8> = Vec::new();
+
+        self.add_leader(&mut bytes);
+
+        // Directory
+        let num_dirs = self.build_directory(&mut bytes);
+
+        // End-of-field after Directory
+        bytes.append(&mut END_OF_FIELD.as_bytes().to_vec());
+
+        self.add_data_fields(&mut bytes);
+
+        // End-of-record after all data fields are added
+        bytes.append(&mut vec![END_OF_RECORD]);
+
+        // Make sure the size and data offset for the leader match.
+        self.sync_leader(num_dirs, &mut bytes);
+
+        Ok(bytes)
+    }
+
+    /// Add the leader to the binary record in progress
+    // Create a dummy leader if necessary.
+    fn add_leader(&self, bytes: &mut Vec<u8>) {
+
+        let mut vec = match &self.leader {
             Some(l) => l.content.as_bytes().to_vec(),
             None => (0..LEADER_SIZE).map(|_| '0' as u8).collect::<Vec<u8>>()
         };
 
+        bytes.append(&mut vec);
+    }
+
+    fn build_directory(&self, bytes: &mut Vec<u8>) -> usize {
+
+        let mut num_dirs = 0;
         let mut prev_end_idx = 0;
+
         for field in &self.control_fields {
+            num_dirs += 1;
 
             let mut field_len = match &field.content {
                 Some(c) => c.as_bytes().len(),
@@ -328,6 +360,7 @@ impl Record {
         }
 
         for field in &self.fields {
+            num_dirs += 1;
 
             let mut field_len = 3; // ind1 + ind2 + field terminator
             for sf in &field.subfields {
@@ -352,7 +385,10 @@ impl Record {
             prev_end_idx = prev_end_idx + field_len;
         }
 
-        bytes.append(&mut END_OF_FIELD.as_bytes().to_vec());
+        num_dirs
+    }
+
+    fn add_data_fields(&self, bytes: &mut Vec<u8>) {
 
         // Now append the actual data
         for field in &self.control_fields {
@@ -379,20 +415,28 @@ impl Record {
                 );
                 bytes.append(&mut s.as_bytes().to_vec());
             }
+
             bytes.append(&mut END_OF_FIELD.as_bytes().to_vec());
         }
+    }
 
-        bytes.append(&mut vec![END_OF_RECORD]);
+    // Sync the byte count and data offset values in the leader to
+    // match the record we just created.
+    fn sync_leader(&self, num_dirs: usize, bytes: &mut Vec<u8>) {
 
-        // Set the byte count of the record in the leader
         let size_str = format!("{:0w$}", bytes.len(), w = RECORD_SIZE_ENTRY);
         let size_bytes = size_str.as_bytes();
 
-        for idx in (0..RECORD_SIZE_ENTRY) {
-            bytes[idx] = size_bytes[idx];
-        }
+        bytes[0..RECORD_SIZE_ENTRY].copy_from_slice(&size_bytes);
 
-        Ok(bytes)
+        // Set the start index of the body of the record
+        let data_start_idx = LEADER_SIZE + (num_dirs * DIRECTORY_ENTRY_LEN) + 1; // end-of-field
+        let data_start_str = format!("{:0w$}", data_start_idx, w = DATA_OFFSET_SIZE);
+
+        let dstart = DATA_OFFSET_START;
+        let dend = dstart + DATA_OFFSET_SIZE;
+
+        bytes[dstart..dend].copy_from_slice(&data_start_str.as_bytes());
     }
 }
 
