@@ -18,11 +18,22 @@ fn main() {
 
         let xml_filename = xml_file_op.unwrap();
 
-        let record = Record::from_xml_file(&xml_filename).expect("MARCXML File Parse");
+        let mut record = Record::from_xml_file(&xml_filename).expect("MARCXML File Parse");
 
         if let Some(title) = record.get_values("245", "a").first() {
             println!("Maintitle => {title}");
         }
+
+        if let Some(field) = record.get_fields_mut("245").first_mut() {
+            if let Some(sf) = field.get_subfields_mut("a").first_mut() {
+                sf.set_content("I Prefer This Title");
+            }
+        }
+
+        if let Some(title) = record.get_values("245", "a").first() {
+            println!("New Maintitle => {title}");
+        }
+
         /*
 
         println!("{}", record.to_xml().expect("MARC to XML OK"));

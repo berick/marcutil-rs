@@ -133,9 +133,15 @@ impl Field {
 
         Ok(())
     }
+
     pub fn get_subfields(&self, code: &str) -> Vec<&Subfield> {
         self.subfields.iter().filter(|f| f.code.eq(code)).collect()
     }
+
+    pub fn get_subfields_mut(&mut self, code: &str) -> Vec<&mut Subfield> {
+        self.subfields.iter_mut().filter(|f| f.code.eq(code)).collect()
+    }
+
 }
 
 #[derive(Debug, Clone)]
@@ -210,6 +216,14 @@ impl Record {
             .collect()
     }
 
+    pub fn get_fields_mut(&mut self, tag: &str) -> Vec<&mut Field> {
+        self.fields
+            .iter_mut()
+            .filter(|f| f.tag.content.eq(tag))
+            .collect()
+    }
+
+
     pub fn get_values(&self, tag: &str, sfcode: &str) -> Vec<&str> {
         let mut vec = Vec::new();
         for field in self.get_fields(tag) {
@@ -221,4 +235,5 @@ impl Record {
         }
         vec
     }
+
 }
