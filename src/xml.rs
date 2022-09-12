@@ -1,5 +1,4 @@
 use std::fs::File;
-use std::io::BufReader;
 use xml::reader::{EventReader, XmlEvent};
 
 use super::Controlfield;
@@ -65,7 +64,8 @@ impl Indicator {
 }
 
 pub struct XmlRecordIterator {
-    reader: EventReader<File>,
+    reader: Option<EventReader<File>>,
+    string: Option<String>,
 }
 
 impl Iterator for XmlRecordIterator {
@@ -73,7 +73,6 @@ impl Iterator for XmlRecordIterator {
 
     fn next(&mut self) -> Option<Self::Item> {
 
-        let mut record = Record::new();
         let mut context = XmlParseContext {
             in_cfield: false,
             in_subfield: false,
@@ -81,9 +80,54 @@ impl Iterator for XmlRecordIterator {
             record_complete: false,
         };
 
+        if self.reader.is_some() {
+            self.read_next_from_file(&mut context)
+        } else {
+            self.read_next_from_string(&mut context)
+        }
+    }
+}
+
+impl XmlRecordIterator {
+
+    pub fn from_file(filename: &str) -> Result<Self, String> {
+
+        let file = match File::open(filename) {
+            Ok(f) => f,
+            Err(e) => {
+                return Err(format!("Cannot read MARCXML file: {filename} {e}"));
+            }
+        };
+
+        Ok(XmlRecordIterator {
+            string: None,
+            reader: Some(EventReader::new(file)) ,
+        })
+    }
+
+    pub fn from_string(xml: &str) -> Result<Self, String> {
+        Ok(XmlRecordIterator {
+            string: Some(xml.to_string()),
+            reader: None,
+        })
+    }
+
+    fn read_next_from_string(&mut self, context: &mut XmlParseContext) -> Option<Record> {
+        let mut record = Record::new();
+        None
+    }
+
+    fn read_next_from_file(&mut self, context: &mut XmlParseContext) -> Option<Record> {
+        let mut record = Record::new();
+
+        let reader = match &mut self.reader {
+            Some(r) => r,
+            None => { return None; }
+        };
+
         loop {
 
-            match self.reader.next() {
+            match reader.next() {
 
                 Ok(evt) => {
 
@@ -92,7 +136,7 @@ impl Iterator for XmlRecordIterator {
                         return None;
                     }
 
-                    match Record::handle_xml_read_event(&mut record, &mut context, evt) {
+                    match Record::handle_xml_read_event(&mut record, context, evt) {
                         Ok(_) => {
                             if context.record_complete {
                                 return Some(record);
@@ -115,21 +159,7 @@ impl Iterator for XmlRecordIterator {
             }
         }
     }
-}
 
-impl XmlRecordIterator {
-
-    pub fn new(filename: &str) -> Result<Self, String> {
-
-        let file = match File::open(filename) {
-            Ok(f) => f,
-            Err(e) => {
-                return Err(format!("Cannot read MARCXML file: {filename} {e}"));
-            }
-        };
-
-        Ok(XmlRecordIterator { reader: EventReader::new(file) })
-    }
 }
 
 
@@ -137,9 +167,10 @@ impl Record {
 
     /// Returns an iterator over the XML file which emits Records.
     pub fn from_xml_file(filename: &str) -> Result<XmlRecordIterator, String> {
-        Ok(XmlRecordIterator::new(filename)?)
+        Ok(XmlRecordIterator::from_file(filename)?)
     }
 
+    /// TODO ITERATOR
     /// Returns a single Record from the XML.
     pub fn from_xml(xml: &str) -> Result<Self, String> {
         let parser = EventReader::new(xml.as_bytes());
