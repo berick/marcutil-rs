@@ -139,9 +139,11 @@ impl Field {
     }
 
     pub fn get_subfields_mut(&mut self, code: &str) -> Vec<&mut Subfield> {
-        self.subfields.iter_mut().filter(|f| f.code.eq(code)).collect()
+        self.subfields
+            .iter_mut()
+            .filter(|f| f.code.eq(code))
+            .collect()
     }
-
 }
 
 #[derive(Debug, Clone)]
@@ -198,7 +200,10 @@ impl Record {
                 self.leader = Some(Leader::new(leader)?);
                 return Ok(());
             }
-            Err(e) => Err(format!("Cannot translate leader to UTF-8 {:?} {}", bytes, e)),
+            Err(e) => Err(format!(
+                "Cannot translate leader to UTF-8 {:?} {}",
+                bytes, e
+            )),
         }
     }
 
@@ -252,7 +257,6 @@ impl Record {
     }
 
     pub fn add_data_field(&mut self, tag: &str, parts: Vec<&str>) -> Result<(), String> {
-
         if tag < "010" {
             return Err(format!("Invalid control field tag: {tag}"));
         }
@@ -289,7 +293,6 @@ impl Record {
 
         Ok(())
     }
-
 
     pub fn get_values(&self, tag: &str, sfcode: &str) -> Vec<&str> {
         let mut vec = Vec::new();

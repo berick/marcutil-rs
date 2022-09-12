@@ -6,7 +6,7 @@ pub use self::record::Record;
 pub use self::record::Subfield;
 pub use self::record::Tag;
 
+pub mod binary;
 pub mod breaker;
 pub mod record;
 pub mod xml;
-pub mod binary;

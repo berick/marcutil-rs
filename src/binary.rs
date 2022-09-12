@@ -1,9 +1,9 @@
-use std::fs::File;
-use std::io::prelude::*;
-use super::Record;
 use super::Controlfield;
 use super::Field;
+use super::Record;
 use super::Subfield;
+use std::fs::File;
+use std::io::prelude::*;
 
 const END_OF_FIELD: &str = "\x1E";
 const END_OF_RECORD: u8 = 29; // '\x1D';
@@ -42,7 +42,7 @@ impl Iterator for BinaryRecordIterator {
                     } else {
                         break; // EOF
                     }
-                },
+                }
                 Err(e) => {
                     // Can't really return an Err from an Iterator.
                     // Log the error and wrap it up.
@@ -56,7 +56,7 @@ impl Iterator for BinaryRecordIterator {
             match Record::from_binary(&bytes) {
                 Ok(r) => {
                     return Some(r);
-                },
+                }
                 Err(e) => {
                     eprintln!("Error processing bytes: {:?} {}", bytes, e);
                     return None;
@@ -69,9 +69,7 @@ impl Iterator for BinaryRecordIterator {
 }
 
 impl BinaryRecordIterator {
-
     pub fn new(filename: &str) -> Result<Self, String> {
-
         let file = match File::open(filename) {
             Ok(f) => f,
             Err(e) => {
@@ -85,16 +83,14 @@ impl BinaryRecordIterator {
 
 /// bytes => String => usize
 fn bytes_to_usize(bytes: &[u8]) -> Result<usize, String> {
-
     match std::str::from_utf8(&bytes) {
-        Ok(bytes_str) => {
-            match bytes_str.parse::<usize>() {
-                Ok(num) => Ok(num),
-                Err(e) => Err(format!(
-                    "Error translating string to usize str={bytes_str} {e}"))
-            }
+        Ok(bytes_str) => match bytes_str.parse::<usize>() {
+            Ok(num) => Ok(num),
+            Err(e) => Err(format!(
+                "Error translating string to usize str={bytes_str} {e}"
+            )),
         },
-        Err(e) => Err(format!("Error translating bytes to string: {bytes:?} {e}"))
+        Err(e) => Err(format!("Error translating bytes to string: {bytes:?} {e}")),
     }
 }
 
@@ -105,10 +101,8 @@ pub struct DirectoryEntry {
 }
 
 impl DirectoryEntry {
-
     /// 'which' 12-byte entry out of the directory as a whole, zero-based.
     pub fn new(which: usize, data_start_idx: usize, dir_bytes: &[u8]) -> Result<Self, String> {
-
         let start = which * DIRECTORY_ENTRY_LEN;
         let end = start + DIRECTORY_ENTRY_LEN;
         let bytes = &dir_bytes[start..end];
@@ -127,8 +121,7 @@ impl DirectoryEntry {
         let field_len = match field_len_str.parse::<usize>() {
             Ok(l) => l,
             Err(e) => {
-                return Err(format!(
-                    "Invalid data length value {} {}", field_len_str, e));
+                return Err(format!("Invalid data length value {} {}", field_len_str, e));
             }
         };
 
@@ -137,7 +130,9 @@ impl DirectoryEntry {
             Ok(l) => l,
             Err(e) => {
                 return Err(format!(
-                    "Invalid data position value {} {}", field_pos_str, e));
+                    "Invalid data position value {} {}",
+                    field_pos_str, e
+                ));
             }
         };
 
@@ -147,13 +142,12 @@ impl DirectoryEntry {
         Ok(DirectoryEntry {
             tag: field_tag.to_string(),
             field_start_idx: start,
-            field_end_idx: last
+            field_end_idx: last,
         })
     }
 }
 
 impl Record {
-
     // Creates a Record from a MARC binary data file.
     pub fn from_binary_file(filename: &str) -> Result<BinaryRecordIterator, String> {
         BinaryRecordIterator::new(filename)
@@ -190,12 +184,16 @@ impl Record {
         // Repported size of the record as a number
         let rec_size = match bytes_to_usize(&size_bytes) {
             Ok(n) => n,
-            Err(e) => { return Err(e); }
+            Err(e) => {
+                return Err(e);
+            }
         };
 
         if rec_byte_count != rec_size {
             return Err(format!(
-                "Record has incorrect size reported={} real={}", rec_size, rec_byte_count));
+                "Record has incorrect size reported={} real={}",
+                rec_size, rec_byte_count
+            ));
         }
 
         record.set_leader_bytes(&leader_bytes)?;
@@ -206,7 +204,9 @@ impl Record {
 
         let data_start_idx = match bytes_to_usize(data_offset_bytes) {
             Ok(n) => n,
-            Err(e) => { return Err(e); }
+            Err(e) => {
+                return Err(e);
+            }
         };
 
         // The full directory as bytes.
@@ -224,13 +224,13 @@ impl Record {
         let mut dir_idx = 0;
 
         while dir_idx < dir_count {
-
             let dir_entry = DirectoryEntry::new(dir_idx, data_start_idx, &dir_bytes)?;
 
-            if let Err(e) =
-                record.process_directory_entry(&rec_bytes, rec_byte_count, &dir_entry) {
+            if let Err(e) = record.process_directory_entry(&rec_bytes, rec_byte_count, &dir_entry) {
                 return Err(format!(
-                    "Error processing directory entry index={} {}", dir_idx, e));
+                    "Error processing directory entry index={} {}",
+                    dir_idx, e
+                ));
             }
 
             dir_idx += 1;
@@ -239,21 +239,21 @@ impl Record {
         Ok(record)
     }
 
-
     /// Unpack a single control field / data field and append to the
     /// record in progress.
     //
     // https://www.loc.gov/marc/bibliographic/bddirectory.html
     fn process_directory_entry(
         &mut self,
-        rec_bytes: &[u8],  // full record as bytes
+        rec_bytes: &[u8],      // full record as bytes
         rec_byte_count: usize, // full size of record
-        dir_entry: &DirectoryEntry
+        dir_entry: &DirectoryEntry,
     ) -> Result<(), String> {
-
         if (dir_entry.field_end_idx) >= rec_byte_count {
             return Err(format!(
-                "Field length exceeds length of record for tag={}", dir_entry.tag));
+                "Field length exceeds length of record for tag={}",
+                dir_entry.tag
+            ));
         }
 
         // Extract the bytes for this directory entry from the directory.
@@ -264,11 +264,14 @@ impl Record {
             Ok(s) => s,
             Err(e) => {
                 return Err(format!(
-                    "Field data is not UTF8 compatible: {:?} {}", field_bytes, e));
+                    "Field data is not UTF8 compatible: {:?} {}",
+                    field_bytes, e
+                ));
             }
         };
 
-        if dir_entry.tag.as_str() < "010" { // Control field
+        if dir_entry.tag.as_str() < "010" {
+            // Control field
             let mut cf = Controlfield::new(&dir_entry.tag)?;
             if field_str.len() > 0 {
                 cf.set_content(&field_str);
@@ -288,7 +291,8 @@ impl Record {
         // build Field's from them.
         let field_parts: Vec<&str> = field_str.split(SUBFIELD_SEPARATOR).collect();
 
-        for part in &field_parts[1..] { // skip the initial SUBFIELD_SEPARATOR
+        for part in &field_parts[1..] {
+            // skip the initial SUBFIELD_SEPARATOR
             let mut sf = Subfield::new(&part[..1]).unwrap(); // code size is known good
             if part.len() > 1 {
                 sf.set_content(&part[1..]);
@@ -302,7 +306,6 @@ impl Record {
     }
 
     pub fn to_binary(&self) -> Result<Vec<u8>, String> {
-
         let mut bytes: Vec<u8> = Vec::new();
 
         self.add_leader(&mut bytes);
@@ -327,17 +330,15 @@ impl Record {
     /// Add the leader to the binary record in progress
     // Create a dummy leader if necessary.
     fn add_leader(&self, bytes: &mut Vec<u8>) {
-
         let mut vec = match &self.leader {
             Some(l) => l.content.as_bytes().to_vec(),
-            None => (0..LEADER_SIZE).map(|_| '0' as u8).collect::<Vec<u8>>()
+            None => (0..LEADER_SIZE).map(|_| '0' as u8).collect::<Vec<u8>>(),
         };
 
         bytes.append(&mut vec);
     }
 
     fn build_directory(&self, bytes: &mut Vec<u8>) -> usize {
-
         let mut num_dirs = 0;
         let mut prev_end_idx = 0;
 
@@ -346,13 +347,14 @@ impl Record {
 
             let mut field_len = match &field.content {
                 Some(c) => c.as_bytes().len(),
-                None => 0
+                None => 0,
             };
 
             field_len += 1; // end of field terminator
 
             // Our directory entry as a string.
-            let s = format!("{}{:0w1$}{:0w2$}",
+            let s = format!(
+                "{}{:0w1$}{:0w2$}",
                 field.tag.content,
                 field_len,
                 prev_end_idx, // our starting point
@@ -373,12 +375,13 @@ impl Record {
                 field_len += 2; // sf code + separator
                 field_len += match &sf.content {
                     Some(c) => c.as_bytes().len(),
-                    None => 0
+                    None => 0,
                 }
             }
 
             // Our directory entry as a string.
-            let s = format!("{}{:0w1$}{:0w2$}",
+            let s = format!(
+                "{}{:0w1$}{:0w2$}",
                 field.tag.content,
                 field_len,
                 prev_end_idx, // our starting point
@@ -395,7 +398,6 @@ impl Record {
     }
 
     fn add_data_fields(&self, bytes: &mut Vec<u8>) {
-
         // Now append the actual data
         for field in &self.control_fields {
             if let Some(c) = &field.content {
@@ -405,19 +407,29 @@ impl Record {
         }
 
         for field in &self.fields {
-
-            let s = format!("{}{}",
-                match &field.ind1.content { Some(i) => i, _ => " " },
-                match &field.ind2.content { Some(i) => i, _ => " " }
+            let s = format!(
+                "{}{}",
+                match &field.ind1.content {
+                    Some(i) => i,
+                    _ => " ",
+                },
+                match &field.ind2.content {
+                    Some(i) => i,
+                    _ => " ",
+                }
             );
 
             bytes.append(&mut s.as_bytes().to_vec());
 
             for sf in &field.subfields {
-                let s = format!("{}{}{}",
+                let s = format!(
+                    "{}{}{}",
                     SUBFIELD_SEPARATOR,
                     sf.code,
-                    match &sf.content { Some(c) => c.as_str(), None => "" }
+                    match &sf.content {
+                        Some(c) => c.as_str(),
+                        None => "",
+                    }
                 );
                 bytes.append(&mut s.as_bytes().to_vec());
             }
@@ -429,7 +441,6 @@ impl Record {
     // Sync the byte count and data offset values in the leader to
     // match the record we just created.
     fn sync_leader(&self, num_dirs: usize, bytes: &mut Vec<u8>) {
-
         let size_str = format!("{:0w$}", bytes.len(), w = RECORD_SIZE_ENTRY);
         let size_bytes = size_str.as_bytes();
 
@@ -445,6 +456,3 @@ impl Record {
         bytes[dstart..dend].copy_from_slice(&data_start_str.as_bytes());
     }
 }
-
-
-

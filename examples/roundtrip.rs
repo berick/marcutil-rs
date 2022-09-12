@@ -15,7 +15,6 @@ fn main() {
     let bin_file_op = params.opt_str("bin-file");
 
     if xml_file_op.is_some() {
-
         let xml_filename = xml_file_op.unwrap();
 
         let mut record = Record::from_xml_file(&xml_filename).expect("MARCXML File Parse");
@@ -34,8 +33,12 @@ fn main() {
             println!("New Maintitle => {title}");
         }
 
-        record.add_control_field("005", "123123123123").expect("Added Control Field");
-        record.add_data_field("650", vec!["a", "Hobbits", "b", "Fiction"]).expect("Added Data Field");
+        record
+            .add_control_field("005", "123123123123")
+            .expect("Added Control Field");
+        record
+            .add_data_field("650", vec!["a", "Hobbits", "b", "Fiction"])
+            .expect("Added Data Field");
 
         println!("{}", record.to_xml().expect("MARC to XML OK"));
 
@@ -56,9 +59,11 @@ fn main() {
     }
 
     if bin_file_op.is_some() {
-
         for record in Record::from_binary_file(&bin_file_op.unwrap()).expect("Start Binary File") {
-            println!("\nBinary record as xml:\n{}", record.to_xml_formatted().unwrap());
+            println!(
+                "\nBinary record as xml:\n{}",
+                record.to_xml_formatted().unwrap()
+            );
         }
     }
 }
