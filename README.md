@@ -50,7 +50,7 @@ for rec in Record::from_binary_file(MARC_FILENAME).expect("Start Binary File") {
 
 ## About
 
-MARC Library for translating to/from MARC XML and MARC Breaker.
+MARC Library for translating to/from MARC XML, MARC Breaker, and Binary MARC.
 
 ## Data Validation
 

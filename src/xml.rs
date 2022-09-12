@@ -52,6 +52,7 @@ struct XmlParseContext {
     in_cfield: bool,
     in_subfield: bool,
     in_leader: bool,
+    record_complete: bool,
 }
 
 impl Indicator {
@@ -63,9 +64,63 @@ impl Indicator {
     }
 }
 
-impl Record {
-    /// Creates a Record from an XML file
-    pub fn from_xml_file(filename: &str) -> Result<Self, String> {
+pub struct XmlRecordIterator {
+    reader: EventReader<File>,
+}
+
+impl Iterator for XmlRecordIterator {
+    type Item = Record;
+
+    fn next(&mut self) -> Option<Self::Item> {
+
+        let mut record = Record::new();
+        let mut context = XmlParseContext {
+            in_cfield: false,
+            in_subfield: false,
+            in_leader: false,
+            record_complete: false,
+        };
+
+        loop {
+
+            match self.reader.next() {
+
+                Ok(evt) => {
+
+                    if XmlEvent::EndDocument == evt {
+                        // All done.
+                        return None;
+                    }
+
+                    match Record::handle_xml_read_event(&mut record, &mut context, evt) {
+                        Ok(_) => {
+                            if context.record_complete {
+                                return Some(record);
+                            }
+                        },
+                        Err(e) => {
+                            // Can't return an Err() from an iterator, so
+                            // log the issue and carry on.
+                            eprintln!("Error processing XML: {e}");
+                            return None;
+                        }
+                    }
+                },
+                Err(e) => {
+                    // Can't return an Err() from an iterator, so
+                    // log the issue and carry on.
+                    eprintln!("Error processing XML: {e}");
+                    return None;
+                }
+            }
+        }
+    }
+}
+
+impl XmlRecordIterator {
+
+    pub fn new(filename: &str) -> Result<Self, String> {
+
         let file = match File::open(filename) {
             Ok(f) => f,
             Err(e) => {
@@ -73,31 +128,19 @@ impl Record {
             }
         };
 
-        let file = BufReader::new(file);
-        let parser = EventReader::new(file);
-        let mut record = Record::new();
+        Ok(XmlRecordIterator { reader: EventReader::new(file) })
+    }
+}
 
-        let mut context = XmlParseContext {
-            in_cfield: false,
-            in_subfield: false,
-            in_leader: false,
-        };
 
-        for evt_res in parser {
-            match evt_res {
-                Ok(evt) => {
-                    Record::handle_xml_read_event(&mut record, &mut context, evt)?;
-                }
-                Err(e) => {
-                    return Err(format!("Error parsing MARCXML: {e}"));
-                }
-            }
-        }
+impl Record {
 
-        Ok(record)
+    /// Returns an iterator over the XML file which emits Records.
+    pub fn from_xml_file(filename: &str) -> Result<XmlRecordIterator, String> {
+        Ok(XmlRecordIterator::new(filename)?)
     }
 
-    /// Creates a Record from an XML string
+    /// Returns a single Record from the XML.
     pub fn from_xml(xml: &str) -> Result<Self, String> {
         let parser = EventReader::new(xml.as_bytes());
         let mut record = Record::new();
@@ -106,6 +149,7 @@ impl Record {
             in_cfield: false,
             in_subfield: false,
             in_leader: false,
+            record_complete: false,
         };
 
         for evt_res in parser {
@@ -116,6 +160,12 @@ impl Record {
                 Err(e) => {
                     return Err(format!("Error parsing MARCXML: {e}"));
                 }
+            }
+
+            if context.record_complete {
+                // In case there are multiple records in the file.
+                // We just want the first.
+                break;
             }
         }
 
@@ -215,7 +265,15 @@ impl Record {
                     }
                     context.in_subfield = false;
                 }
+            },
+
+            XmlEvent::EndElement {
+                name, ..
+            } => match name.local_name.as_str() {
+                "record" => context.record_complete = true,
+                _ => {}
             }
+
             _ => {}
         }
 
