@@ -256,15 +256,20 @@ impl Record {
         Ok(())
     }
 
-    pub fn add_data_field(&mut self, tag: &str, parts: Vec<&str>) -> Result<(), String> {
+    pub fn add_data_field(&mut self, tag: &str, ind1: &str,
+        ind2: &str, subfields: Vec<&str>) -> Result<(), String> {
+
         if tag < "010" {
-            return Err(format!("Invalid control field tag: {tag}"));
+            return Err(format!("Invalid data field tag: {tag}"));
         }
 
         let mut field = Field::new(tag)?;
+        field.set_ind1(ind1)?;
+        field.set_ind2(ind2)?;
+
         let mut sf_op: Option<Subfield> = None;
 
-        for part in parts {
+        for part in subfields {
             if sf_op.is_none() {
                 sf_op = Some(Subfield::new(part)?);
             } else {

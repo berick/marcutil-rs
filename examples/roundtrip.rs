@@ -37,7 +37,7 @@ fn main() {
             .add_control_field("005", "123123123123")
             .expect("Added Control Field");
         record
-            .add_data_field("650", vec!["a", "Hobbits", "b", "Fiction"])
+            .add_data_field("650", "0", " ", vec!["a", "Hobbits", "b", "Fiction"])
             .expect("Added Data Field");
 
         println!("{}", record.to_xml().expect("MARC to XML OK"));

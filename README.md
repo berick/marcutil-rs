@@ -23,6 +23,13 @@ if let Some(title) = record.get_values("245", "a").first() {
     println!("New Maintitle => {title}");
 }
 
+record                                                                 
+	.add_control_field("005", "123123123123")                          
+	.expect("Added Control Field");                                    
+record                                                                 
+	.add_data_field("650", "1", " ", vec!["a", "Hobbits", "b", "Fiction"])       
+	.expect("Added Data Field");     
+
 // Turn the record into Breaker text
 let breaker = record.to_breaker();
 
