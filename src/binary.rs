@@ -184,13 +184,10 @@ impl Record {
 
         let leader_bytes = &rec_bytes[0..LEADER_SIZE];
 
-        // Reported size of the record
+        // Reported size of the record byte chunk
         let size_bytes = &leader_bytes[0..RECORD_SIZE_ENTRY];
 
-        // Where in this pile of bytes do the control/data fields tart.
-        let data_offset_bytes =
-            &leader_bytes[DATA_OFFSET_START..(DATA_OFFSET_START + DATA_OFFSET_SIZE)];
-
+        // Repported size of the record as a number
         let rec_size = match bytes_to_usize(&size_bytes) {
             Ok(n) => n,
             Err(e) => { return Err(e); }
@@ -203,19 +200,26 @@ impl Record {
 
         record.set_leader_bytes(&leader_bytes)?;
 
+        // Where in this pile of bytes do the control/data fields tart.
+        let data_offset_bytes =
+            &leader_bytes[DATA_OFFSET_START..(DATA_OFFSET_START + DATA_OFFSET_SIZE)];
+
         let data_start_idx = match bytes_to_usize(data_offset_bytes) {
             Ok(n) => n,
             Err(e) => { return Err(e); }
         };
 
+        // The full directory as bytes.
         // -1 to skip the END_OF_FIELD
         let dir_bytes = &rec_bytes[LEADER_SIZE..(data_start_idx - 1)];
 
+        // Directory byte length should be divisible by the directry entry length.
         let dir_len = dir_bytes.len();
         if dir_len == 0 || dir_len % DIRECTORY_ENTRY_LEN != 0 {
             return Err(format!("Invalid directory length {}", dir_len));
         }
 
+        // How many directory entries are in this record.
         let dir_count = dir_bytes.len() / DIRECTORY_ENTRY_LEN;
         let mut dir_idx = 0;
 
@@ -224,7 +228,7 @@ impl Record {
             let dir_entry = DirectoryEntry::new(dir_idx, data_start_idx, &dir_bytes)?;
 
             if let Err(e) =
-                record.process_directory_entry(&rec_bytes, &dir_entry, rec_byte_count) {
+                record.process_directory_entry(&rec_bytes, rec_byte_count, &dir_entry) {
                 return Err(format!(
                     "Error processing directory entry index={} {}", dir_idx, e));
             }
@@ -242,9 +246,9 @@ impl Record {
     // https://www.loc.gov/marc/bibliographic/bddirectory.html
     fn process_directory_entry(
         &mut self,
-        rec_bytes: &[u8],
-        dir_entry: &DirectoryEntry,
-        rec_byte_count: usize,
+        rec_bytes: &[u8],  // full record as bytes
+        rec_byte_count: usize, // full size of record
+        dir_entry: &DirectoryEntry
     ) -> Result<(), String> {
 
         if (dir_entry.field_end_idx) >= rec_byte_count {
@@ -252,8 +256,10 @@ impl Record {
                 "Field length exceeds length of record for tag={}", dir_entry.tag));
         }
 
+        // Extract the bytes for this directory entry from the directory.
         let field_bytes = &rec_bytes[dir_entry.field_start_idx..dir_entry.field_end_idx];
 
+        // Turn said bytes into a string
         let field_str = match std::str::from_utf8(&field_bytes) {
             Ok(s) => s,
             Err(e) => {
