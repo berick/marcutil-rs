@@ -20,7 +20,6 @@ fn main() {
 
         let mut record = Record::from_xml_file(&xml_filename).expect("MARCXML File Parse");
 
-        /*
         if let Some(title) = record.get_values("245", "a").first() {
             println!("Maintitle => {title}");
         }
@@ -35,6 +34,8 @@ fn main() {
             println!("New Maintitle => {title}");
         }
 
+        record.add_control_field("005", "123123123123").expect("Added Control Field");
+        record.add_data_field("650", vec!["a", "Hobbits", "b", "Fiction"]).expect("Added Data Field");
 
         println!("{}", record.to_xml().expect("MARC to XML OK"));
 
@@ -48,7 +49,6 @@ fn main() {
             "\n{}",
             record2.to_xml_formatted().expect("We made some xml")
         );
-        */
 
         let bytes = record.to_binary().expect("To Binary");
 

@@ -223,6 +223,73 @@ impl Record {
             .collect()
     }
 
+    pub fn add_control_field(&mut self, tag: &str, content: &str) -> Result<(), String> {
+        let mut field = Controlfield::new(tag)?;
+
+        if tag >= "010" {
+            return Err(format!("Invalid control field tag: {tag}"));
+        }
+
+        field.set_content(content);
+
+        // Insert the field at the logical position in the record.
+
+        let mut pos = 0;
+        for (idx, f) in self.control_fields.iter().enumerate() {
+            pos = idx;
+            if f.tag.content.as_str() > tag {
+                break;
+            }
+        }
+
+        if pos == self.control_fields.len() {
+            self.control_fields.push(field);
+        } else {
+            self.control_fields.insert(pos, field);
+        }
+
+        Ok(())
+    }
+
+    pub fn add_data_field(&mut self, tag: &str, parts: Vec<&str>) -> Result<(), String> {
+
+        if tag < "010" {
+            return Err(format!("Invalid control field tag: {tag}"));
+        }
+
+        let mut field = Field::new(tag)?;
+        let mut sf_op: Option<Subfield> = None;
+
+        for part in parts {
+            if sf_op.is_none() {
+                sf_op = Some(Subfield::new(part)?);
+            } else {
+                let mut sf = sf_op.unwrap();
+                sf.set_content(part);
+                field.subfields.push(sf);
+                sf_op = None;
+            }
+        }
+
+        // Insert the field at the logical position in the record.
+
+        let mut pos = 0;
+        for (idx, f) in self.fields.iter().enumerate() {
+            pos = idx;
+            if f.tag.content.as_str() > tag {
+                break;
+            }
+        }
+
+        if pos == self.fields.len() {
+            self.fields.push(field);
+        } else {
+            self.fields.insert(pos, field);
+        }
+
+        Ok(())
+    }
+
 
     pub fn get_values(&self, tag: &str, sfcode: &str) -> Vec<&str> {
         let mut vec = Vec::new();
@@ -235,5 +302,4 @@ impl Record {
         }
         vec
     }
-
 }

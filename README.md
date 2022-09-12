@@ -12,6 +12,17 @@ if let Some(title) = record.get_values("245", "a").first() {
     println!("Maintitle => {title}");
 }
 
+// Modify a field value
+if let Some(field) = record.get_fields_mut("245").first_mut() {
+    if let Some(sf) = field.get_subfields_mut("a").first_mut() {
+        sf.set_content("I Prefer This Title");
+    }
+}
+
+if let Some(title) = record.get_values("245", "a").first() {
+    println!("New Maintitle => {title}");
+}
+
 // Turn the record into Breaker text
 let breaker = record.to_breaker();
 
