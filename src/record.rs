@@ -30,11 +30,13 @@ pub struct Controlfield {
 }
 
 impl Controlfield {
-
     pub fn new(tag: &str, content: Option<&str>) -> Result<Self, String> {
         Ok(Controlfield {
             tag: Tag::new(tag)?,
-            content: match content { Some(c) => c.to_string(), _ => String::new() }
+            content: match content {
+                Some(c) => c.to_string(),
+                _ => String::new(),
+            },
         })
     }
 
@@ -58,7 +60,10 @@ impl Subfield {
 
         Ok(Subfield {
             code: String::from(code),
-            content: match content { Some(c) => c.to_string(), _ => String::new() }
+            content: match content {
+                Some(c) => c.to_string(),
+                _ => String::new(),
+            },
         })
     }
 
@@ -67,10 +72,9 @@ impl Subfield {
     }
 }
 
-pub struct Indicator { }
+pub struct Indicator {}
 
 impl Indicator {
-
     pub fn new_from_str(value: &str) -> Result<char, String> {
         let bytes = value.as_bytes();
 
@@ -242,9 +246,13 @@ impl Record {
         Ok(())
     }
 
-    pub fn add_data_field(&mut self, tag: &str, ind1: &str,
-        ind2: &str, subfields: Vec<&str>) -> Result<(), String> {
-
+    pub fn add_data_field(
+        &mut self,
+        tag: &str,
+        ind1: &str,
+        ind2: &str,
+        subfields: Vec<&str>,
+    ) -> Result<(), String> {
         if tag < "010" {
             return Err(format!("Invalid data field tag: {tag}"));
         }

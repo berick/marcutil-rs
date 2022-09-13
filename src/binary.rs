@@ -403,12 +403,7 @@ impl Record {
             bytes.append(&mut s.as_bytes().to_vec());
 
             for sf in &field.subfields {
-                let s = format!(
-                    "{}{}{}",
-                    SUBFIELD_SEPARATOR,
-                    sf.code,
-                    sf.content.as_str()
-                );
+                let s = format!("{}{}{}", SUBFIELD_SEPARATOR, sf.code, sf.content.as_str());
                 bytes.append(&mut s.as_bytes().to_vec());
             }
 

@@ -5,7 +5,6 @@ const MARC_XML: &str = r#"<?xml version="1.0"?><record xmlns="http://www.loc.gov
 
 const EMPTY_MARC_XML: &str = r#"<?xml version="1.0"?><record xmlns="http://www.loc.gov/MARC21/slim" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.loc.gov/MARC21/slim http://www.loc.gov/standards/marcxml/schema/MARC21slim.xsd"><leader></leader></record>"#;
 
-
 const MARC_BINARY: &str = r#"00260nz  a2200109O  450000100030000000300050000300500170000800800410002503500180006610000480008490100180013254CONS19981117195632.0970601 nbacannbabn           a ana     d  a(CONIFER)48741 aHandel, George Frideric, 1685-1759.xOperas  c54tauthority"#;
 
 #[test]
@@ -63,7 +62,6 @@ fn odd_records() {
 
 #[test]
 fn binary() {
-
     let src_bytes = MARC_BINARY.as_bytes().to_vec();
 
     let record = Record::from_binary(&src_bytes).expect("Record from Binary");
@@ -76,5 +74,3 @@ fn binary() {
 
     assert_eq!(src_bytes, bytes);
 }
-
-

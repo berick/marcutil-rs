@@ -62,7 +62,6 @@ impl Iterator for XmlRecordIterator {
     type Item = Record;
 
     fn next(&mut self) -> Option<Self::Item> {
-
         let mut context = XmlParseContext {
             in_cfield: false,
             in_subfield: false,
@@ -79,9 +78,7 @@ impl Iterator for XmlRecordIterator {
 }
 
 impl XmlRecordIterator {
-
     pub fn from_file(filename: &str) -> Result<Self, String> {
-
         let file = match File::open(filename) {
             Ok(f) => f,
             Err(e) => {
@@ -91,7 +88,7 @@ impl XmlRecordIterator {
 
         Ok(XmlRecordIterator {
             string: None,
-            reader: Some(EventReader::new(file)) ,
+            reader: Some(EventReader::new(file)),
         })
     }
 
@@ -112,15 +109,14 @@ impl XmlRecordIterator {
 
         let reader = match &mut self.reader {
             Some(r) => r,
-            None => { return None; }
+            None => {
+                return None;
+            }
         };
 
         loop {
-
             match reader.next() {
-
                 Ok(evt) => {
-
                     if XmlEvent::EndDocument == evt {
                         // All done.
                         return None;
@@ -131,7 +127,7 @@ impl XmlRecordIterator {
                             if context.record_complete {
                                 return Some(record);
                             }
-                        },
+                        }
                         Err(e) => {
                             // Can't return an Err() from an iterator, so
                             // log the issue and carry on.
@@ -139,7 +135,7 @@ impl XmlRecordIterator {
                             return None;
                         }
                     }
-                },
+                }
                 Err(e) => {
                     // Can't return an Err() from an iterator, so
                     // log the issue and carry on.
@@ -149,12 +145,9 @@ impl XmlRecordIterator {
             }
         }
     }
-
 }
 
-
 impl Record {
-
     /// Returns an iterator over the XML file which emits Records.
     pub fn from_xml_file(filename: &str) -> Result<XmlRecordIterator, String> {
         Ok(XmlRecordIterator::from_file(filename)?)
@@ -213,7 +206,9 @@ impl Record {
                         .filter(|a| a.name.local_name.eq("tag"))
                         .next()
                     {
-                        record.control_fields.push(Controlfield::new(&t.value, None)?);
+                        record
+                            .control_fields
+                            .push(Controlfield::new(&t.value, None)?);
                         context.in_cfield = true;
                     } else {
                         return Err(format!("Controlfield has no tag"));
@@ -286,14 +281,12 @@ impl Record {
                     }
                     context.in_subfield = false;
                 }
-            },
+            }
 
-            XmlEvent::EndElement {
-                name, ..
-            } => match name.local_name.as_str() {
+            XmlEvent::EndElement { name, .. } => match name.local_name.as_str() {
                 "record" => context.record_complete = true,
                 _ => {}
-            }
+            },
 
             _ => {}
         }

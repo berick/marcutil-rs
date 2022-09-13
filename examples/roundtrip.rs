@@ -15,22 +15,21 @@ fn main() {
     let bin_file_op = params.opt_str("bin-file");
 
     if xml_file_op.is_some() {
-        for mut record in
-            Record::from_xml_file(&xml_file_op.unwrap()).expect("Created Iterator") {
+        for mut record in Record::from_xml_file(&xml_file_op.unwrap()).expect("Created Iterator") {
             inspect_record(&mut record);
         }
     }
 
     if bin_file_op.is_some() {
         for mut record in
-            Record::from_binary_file(&bin_file_op.unwrap()).expect("Start Binary File") {
+            Record::from_binary_file(&bin_file_op.unwrap()).expect("Start Binary File")
+        {
             inspect_record(&mut record);
         }
     }
 }
 
 fn inspect_record(record: &mut Record) {
-
     if let Some(title) = record.get_values("245", "a").first() {
         println!("Maintitle => {title}");
     }
@@ -60,4 +59,3 @@ fn inspect_record(record: &mut Record) {
 
     println!("Create {} bytes of binary", binary.len());
 }
-
