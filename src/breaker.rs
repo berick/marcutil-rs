@@ -1,6 +1,5 @@
 use super::Controlfield;
 use super::Field;
-use super::Indicator;
 use super::Leader;
 use super::Record;
 use super::Subfield;
@@ -116,6 +115,8 @@ impl Record {
             return Ok(());
         }
 
+        // There is a space between the tag and the 1st indicator.
+
         if tag < "010" {
             let mut cf = Controlfield::new(tag, None)?;
             if len > 4 {
@@ -128,11 +129,11 @@ impl Record {
         let mut field = Field::new(tag)?;
 
         if len > 4 {
-            field.ind1 = Indicator::new_from_str(&line[4..5].replace("\\", " "))?;
+            field.set_ind1(&line[4..5].replace("\\", " "))?;
         }
 
         if len > 5 {
-            field.ind2 = Indicator::new_from_str(&line[5..6].replace("\\", " "))?;
+            field.set_ind2(&line[5..6].replace("\\", " "))?;
         }
 
         if len > 6 {

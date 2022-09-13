@@ -56,20 +56,6 @@ impl Subfield {
     }
 }
 
-pub struct Indicator {}
-
-impl Indicator {
-    pub fn new_from_str(value: &str) -> Result<char, String> {
-        let bytes = value.as_bytes();
-
-        match bytes.len() {
-            2.. => Err(format!("Invalid indicator value: '{value}'")),
-            1 => Ok(bytes[0] as char),
-            _ => Ok(' '),
-        }
-    }
-}
-
 /// A MARC Data Field with tag, indicators, and subfields.
 #[derive(Debug, Clone)]
 pub struct Field {
@@ -102,7 +88,15 @@ impl Field {
     }
 
     fn set_ind(&mut self, ind: &str, first: bool) -> Result<(), String> {
-        let i = Indicator::new_from_str(ind)?;
+        let bytes = ind.as_bytes();
+
+        let i = match ind.bytes().len() {
+            2.. => {
+                return Err(format!("Invalid indicator value: '{ind}'"));
+            }
+            1 => bytes[0] as char,
+            _ => ' ',
+        };
 
         match first {
             true => self.ind1 = i,
