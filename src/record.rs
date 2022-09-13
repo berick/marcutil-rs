@@ -1,9 +1,4 @@
 ///! Models a MARC record with associated components.
-
-// Much of the MARC data that could be stored as bytes (e.g. leader,
-// indicators) is stored as Strings instead.  I chose Strings since they
-// are easier to work with for the library user and in most cases the
-// data would have to be stringified anyway to make sense of it.
 const TAG_SIZE: usize = 3;
 const LEADER_SIZE: usize = 24;
 const INDICATOR_SIZE: usize = 1;
@@ -31,19 +26,20 @@ impl Tag {
 #[derive(Debug, Clone)]
 pub struct Controlfield {
     pub tag: Tag,
-    pub content: Option<String>,
+    pub content: String,
 }
 
 impl Controlfield {
-    pub fn new(tag: &str) -> Result<Self, String> {
+
+    pub fn new(tag: &str, content: Option<&str>) -> Result<Self, String> {
         Ok(Controlfield {
             tag: Tag::new(tag)?,
-            content: None,
+            content: match content { Some(c) => c.to_string(), _ => String::new() }
         })
     }
 
     pub fn set_content(&mut self, content: &str) {
-        self.content = Some(String::from(content));
+        self.content = content.to_string();
     }
 }
 
@@ -51,47 +47,37 @@ impl Controlfield {
 #[derive(Debug, Clone)]
 pub struct Subfield {
     pub code: String,
-    pub content: Option<String>,
+    pub content: String,
 }
 
 impl Subfield {
-    pub fn new(code: &str) -> Result<Self, String> {
+    pub fn new(code: &str, content: Option<&str>) -> Result<Self, String> {
         if code.bytes().len() != SF_CODE_SIZE {
             return Err(format!("Invalid subfield code: {code}"));
         }
 
         Ok(Subfield {
             code: String::from(code),
-            content: None,
+            content: match content { Some(c) => c.to_string(), _ => String::new() }
         })
     }
 
     pub fn set_content(&mut self, content: &str) {
-        self.content = Some(String::from(content));
+        self.content = String::from(content);
     }
 }
 
-/// A single 1-byte indicator value
-#[derive(Debug, Clone)]
-pub struct Indicator {
-    pub content: Option<String>,
-}
+pub struct Indicator { }
 
 impl Indicator {
-    pub fn new(value: &str) -> Result<Self, String> {
-        if value.ne("") {
-            // Empty indicator is fine
-            if value.bytes().len() != INDICATOR_SIZE {
-                return Err(format!("Invalid indicator value: '{value}'"));
-            }
-        }
 
-        if value.eq("") || value.eq(" ") {
-            Ok(Indicator { content: None })
-        } else {
-            Ok(Indicator {
-                content: Some(value.to_string()),
-            })
+    pub fn new_from_str(value: &str) -> Result<char, String> {
+        let bytes = value.as_bytes();
+
+        match bytes.len() {
+            2.. => Err(format!("Invalid indicator value: '{value}'")),
+            1 => Ok(bytes[0] as char),
+            _ => Ok(' '),
         }
     }
 }
@@ -100,8 +86,8 @@ impl Indicator {
 #[derive(Debug, Clone)]
 pub struct Field {
     pub tag: Tag,
-    pub ind1: Indicator,
-    pub ind2: Indicator,
+    pub ind1: char,
+    pub ind2: char,
     pub subfields: Vec<Subfield>,
 }
 
@@ -109,8 +95,8 @@ impl Field {
     pub fn new(tag: &str) -> Result<Self, String> {
         Ok(Field {
             tag: Tag::new(tag)?,
-            ind1: Indicator::new("")?,
-            ind2: Indicator::new("")?,
+            ind1: ' ',
+            ind2: ' ',
             subfields: Vec::new(),
         })
     }
@@ -124,7 +110,7 @@ impl Field {
     }
 
     fn set_ind(&mut self, ind: &str, first: bool) -> Result<(), String> {
-        let i = Indicator::new(ind)?;
+        let i = Indicator::new_from_str(ind)?;
 
         match first {
             true => self.ind1 = i,
@@ -229,7 +215,7 @@ impl Record {
     }
 
     pub fn add_control_field(&mut self, tag: &str, content: &str) -> Result<(), String> {
-        let mut field = Controlfield::new(tag)?;
+        let mut field = Controlfield::new(tag, Some(content))?;
 
         if tag >= "010" {
             return Err(format!("Invalid control field tag: {tag}"));
@@ -271,7 +257,7 @@ impl Record {
 
         for part in subfields {
             if sf_op.is_none() {
-                sf_op = Some(Subfield::new(part)?);
+                sf_op = Some(Subfield::new(part, None)?);
             } else {
                 let mut sf = sf_op.unwrap();
                 sf.set_content(part);
@@ -303,9 +289,7 @@ impl Record {
         let mut vec = Vec::new();
         for field in self.get_fields(tag) {
             for sf in field.get_subfields(sfcode) {
-                if let Some(content) = &sf.content {
-                    vec.push(content.as_str());
-                }
+                vec.push(sf.content.as_str());
             }
         }
         vec

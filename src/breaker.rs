@@ -1,6 +1,6 @@
 use super::Controlfield;
-use super::Field;
 use super::Indicator;
+use super::Field;
 use super::Leader;
 use super::Record;
 use super::Subfield;
@@ -20,39 +20,21 @@ pub fn unescape_from_breaker(value: &str) -> String {
 
 impl Controlfield {
     pub fn to_breaker(&self) -> String {
-        match &self.content {
-            Some(c) => format!("{} {}", self.tag.content, escape_to_breaker(c)),
-            None => format!("{}", self.tag.content),
+        if self.content.len() > 0 {
+            format!("{} {}", self.tag.content, escape_to_breaker(&self.content))
+        } else {
+            format!("{}", self.tag.content)
         }
     }
 }
 
 impl Subfield {
     pub fn to_breaker(&self) -> String {
-        let s = format!("${}", self.code);
-        if let Some(c) = &self.content {
-            s + escape_to_breaker(c).as_str()
-        } else {
-            s
-        }
-    }
-}
-
-impl Indicator {
-    pub fn to_breaker(&self) -> String {
-        match &self.content {
-            Some(c) => c.to_string(),
-            None => String::from("\\"),
-        }
-    }
-
-    pub fn from_breaker(content: &str) -> Self {
-        match content {
-            "\\" => Indicator { content: None },
-            _ => Indicator {
-                content: Some(content.to_string()),
-            },
-        }
+        format!(
+            "${}{}",
+            escape_to_breaker(&self.code),
+            escape_to_breaker(&self.content),
+        )
     }
 }
 
@@ -61,8 +43,8 @@ impl Field {
         let mut s = format!(
             "{} {}{}",
             self.tag.content,
-            self.ind1.to_breaker(),
-            self.ind2.to_breaker()
+            match &self.ind1 { ' ' => '\\', _ => self.ind1 },
+            match &self.ind2 { ' ' => '\\', _ => self.ind2 },
         );
 
         for sf in &self.subfields {
@@ -129,7 +111,7 @@ impl Record {
         }
 
         if tag < "010" {
-            let mut cf = Controlfield::new(tag)?;
+            let mut cf = Controlfield::new(tag, None)?;
             if len > 4 {
                 cf.set_content(unescape_from_breaker(&line[4..]).as_str());
             }
@@ -140,11 +122,13 @@ impl Record {
         let mut field = Field::new(tag)?;
 
         if len > 4 {
-            field.ind1 = Indicator::from_breaker(&line[4..5]);
+            field.ind1 =
+                Indicator::new_from_str(&line[4..5].replace("\\", " "))?;
         }
 
         if len > 5 {
-            field.ind2 = Indicator::from_breaker(&line[5..6]);
+            field.ind2 =
+                Indicator::new_from_str(&line[5..6].replace("\\", " "))?;
         }
 
         if len > 6 {
@@ -152,7 +136,7 @@ impl Record {
                 if sf.len() == 0 {
                     continue;
                 }
-                let mut subfield = Subfield::new(&sf[..1])?;
+                let mut subfield = Subfield::new(&sf[..1], None)?;
                 if sf.len() > 1 {
                     subfield.set_content(unescape_from_breaker(&sf[1..]).as_str());
                 }

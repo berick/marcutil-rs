@@ -3,7 +3,6 @@ use xml::reader::{EventReader, XmlEvent};
 
 use super::Controlfield;
 use super::Field;
-use super::Indicator;
 use super::Record;
 use super::Subfield;
 
@@ -52,15 +51,6 @@ struct XmlParseContext {
     in_subfield: bool,
     in_leader: bool,
     record_complete: bool,
-}
-
-impl Indicator {
-    pub fn to_xml(&self) -> String {
-        match &self.content {
-            Some(c) => c.to_string(),
-            None => String::from(" "),
-        }
-    }
 }
 
 pub struct XmlRecordIterator {
@@ -223,7 +213,7 @@ impl Record {
                         .filter(|a| a.name.local_name.eq("tag"))
                         .next()
                     {
-                        record.control_fields.push(Controlfield::new(&t.value)?);
+                        record.control_fields.push(Controlfield::new(&t.value, None)?);
                         context.in_cfield = true;
                     } else {
                         return Err(format!("Controlfield has no tag"));
@@ -269,7 +259,7 @@ impl Record {
                             .filter(|a| a.name.local_name.eq("code"))
                             .next()
                         {
-                            if let Ok(sf) = Subfield::new(&code.value) {
+                            if let Ok(sf) = Subfield::new(&code.value, None) {
                                 context.in_subfield = true;
                                 field.subfields.push(sf);
                             }
@@ -358,13 +348,10 @@ impl Record {
             format(formatted, &mut xml, 2);
 
             xml += &format!(
-                r#"<controlfield tag="{}">"#,
-                escape_xml(&cfield.tag.content)
+                r#"<controlfield tag="{}">{}</controlfield>"#,
+                escape_xml(&cfield.tag.content),
+                escape_xml(&cfield.content),
             );
-            if let Some(ref c) = cfield.content {
-                xml += &escape_xml(c);
-            }
-            xml += "</controlfield>";
         }
 
         // Data Fields
@@ -375,20 +362,18 @@ impl Record {
             xml += &format!(
                 r#"<datafield tag="{}" ind1="{}" ind2="{}">"#,
                 escape_xml(&field.tag.content),
-                escape_xml(&field.ind1.to_xml()),
-                escape_xml(&field.ind2.to_xml())
+                escape_xml(&field.ind1.to_string()),
+                escape_xml(&field.ind2.to_string())
             );
 
             for sf in &field.subfields {
                 format(formatted, &mut xml, 4);
 
-                xml += &format!(r#"<subfield code="{}">"#, sf.code);
-
-                if let Some(ref c) = sf.content {
-                    xml += &escape_xml(c);
-                }
-
-                xml += "</subfield>";
+                xml += &format!(
+                    r#"<subfield code="{}">{}</subfield>"#,
+                    &escape_xml(&sf.code),
+                    &escape_xml(&sf.content)
+                );
             }
 
             format(formatted, &mut xml, 2);

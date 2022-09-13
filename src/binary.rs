@@ -272,7 +272,7 @@ impl Record {
 
         if dir_entry.tag.as_str() < "010" {
             // Control field
-            let mut cf = Controlfield::new(&dir_entry.tag)?;
+            let mut cf = Controlfield::new(&dir_entry.tag, None)?;
             if field_str.len() > 0 {
                 cf.set_content(&field_str);
             }
@@ -293,7 +293,7 @@ impl Record {
 
         for part in &field_parts[1..] {
             // skip the initial SUBFIELD_SEPARATOR
-            let mut sf = Subfield::new(&part[..1]).unwrap(); // code size is known good
+            let mut sf = Subfield::new(&part[..1], None).unwrap(); // code size is known good
             if part.len() > 1 {
                 sf.set_content(&part[1..]);
             }
@@ -345,10 +345,7 @@ impl Record {
         for field in &self.control_fields {
             num_dirs += 1;
 
-            let mut field_len = match &field.content {
-                Some(c) => c.as_bytes().len(),
-                None => 0,
-            };
+            let mut field_len = field.content.as_bytes().len();
 
             field_len += 1; // end of field terminator
 
@@ -373,10 +370,7 @@ impl Record {
             let mut field_len = 3; // ind1 + ind2 + field terminator
             for sf in &field.subfields {
                 field_len += 2; // sf code + separator
-                field_len += match &sf.content {
-                    Some(c) => c.as_bytes().len(),
-                    None => 0,
-                }
+                field_len += sf.content.as_bytes().len();
             }
 
             // Our directory entry as a string.
@@ -400,25 +394,12 @@ impl Record {
     fn add_data_fields(&self, bytes: &mut Vec<u8>) {
         // Now append the actual data
         for field in &self.control_fields {
-            if let Some(c) = &field.content {
-                bytes.append(&mut c.as_bytes().to_vec());
-            }
+            bytes.append(&mut field.content.as_bytes().to_vec());
             bytes.append(&mut END_OF_FIELD.as_bytes().to_vec());
         }
 
         for field in &self.fields {
-            let s = format!(
-                "{}{}",
-                match &field.ind1.content {
-                    Some(i) => i,
-                    _ => " ",
-                },
-                match &field.ind2.content {
-                    Some(i) => i,
-                    _ => " ",
-                }
-            );
-
+            let s = format!("{}{}", &field.ind1, &field.ind2);
             bytes.append(&mut s.as_bytes().to_vec());
 
             for sf in &field.subfields {
@@ -426,10 +407,7 @@ impl Record {
                     "{}{}{}",
                     SUBFIELD_SEPARATOR,
                     sf.code,
-                    match &sf.content {
-                        Some(c) => c.as_str(),
-                        None => "",
-                    }
+                    sf.content.as_str()
                 );
                 bytes.append(&mut s.as_bytes().to_vec());
             }
