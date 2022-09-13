@@ -4,7 +4,6 @@ pub use self::record::Indicator;
 pub use self::record::Leader;
 pub use self::record::Record;
 pub use self::record::Subfield;
-pub use self::record::Tag;
 
 pub mod binary;
 pub mod breaker;

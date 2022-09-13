@@ -352,7 +352,7 @@ impl Record {
             // Our directory entry as a string.
             let s = format!(
                 "{}{:0w1$}{:0w2$}",
-                field.tag.content,
+                field.tag,
                 field_len,
                 prev_end_idx, // our starting point
                 w1 = DATA_LENGTH_SIZE,
@@ -376,7 +376,7 @@ impl Record {
             // Our directory entry as a string.
             let s = format!(
                 "{}{:0w1$}{:0w2$}",
-                field.tag.content,
+                field.tag,
                 field_len,
                 prev_end_idx, // our starting point
                 w1 = DATA_LENGTH_SIZE,

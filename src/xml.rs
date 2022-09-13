@@ -342,7 +342,7 @@ impl Record {
 
             xml += &format!(
                 r#"<controlfield tag="{}">{}</controlfield>"#,
-                escape_xml(&cfield.tag.content),
+                escape_xml(&cfield.tag),
                 escape_xml(&cfield.content),
             );
         }
@@ -354,7 +354,7 @@ impl Record {
 
             xml += &format!(
                 r#"<datafield tag="{}" ind1="{}" ind2="{}">"#,
-                escape_xml(&field.tag.content),
+                escape_xml(&field.tag),
                 escape_xml(&field.ind1.to_string()),
                 escape_xml(&field.ind2.to_string())
             );

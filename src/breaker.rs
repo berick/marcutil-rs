@@ -21,9 +21,9 @@ pub fn unescape_from_breaker(value: &str) -> String {
 impl Controlfield {
     pub fn to_breaker(&self) -> String {
         if self.content.len() > 0 {
-            format!("{} {}", self.tag.content, escape_to_breaker(&self.content))
+            format!("{} {}", self.tag, escape_to_breaker(&self.content))
         } else {
-            format!("{}", self.tag.content)
+            format!("{}", self.tag)
         }
     }
 }
@@ -42,7 +42,7 @@ impl Field {
     pub fn to_breaker(&self) -> String {
         let mut s = format!(
             "{} {}{}",
-            self.tag.content,
+            self.tag,
             match &self.ind1 {
                 ' ' => '\\',
                 _ => self.ind1,

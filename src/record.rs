@@ -1,38 +1,22 @@
 ///! Models a MARC record with associated components.
 const TAG_SIZE: usize = 3;
 const LEADER_SIZE: usize = 24;
-const INDICATOR_SIZE: usize = 1;
 const SF_CODE_SIZE: usize = 1;
-
-/// A single 3-byte tag.
-#[derive(Debug, Clone)]
-pub struct Tag {
-    pub content: String,
-}
-
-impl Tag {
-    pub fn new(tag: &str) -> Result<Self, String> {
-        if tag.bytes().len() == TAG_SIZE {
-            Ok(Tag {
-                content: tag.to_string(),
-            })
-        } else {
-            Err(format!("Invalid tag value: {tag}"))
-        }
-    }
-}
 
 /// MARC Control Field whose tag value is < "010"
 #[derive(Debug, Clone)]
 pub struct Controlfield {
-    pub tag: Tag,
+    pub tag: String,
     pub content: String,
 }
 
 impl Controlfield {
     pub fn new(tag: &str, content: Option<&str>) -> Result<Self, String> {
+        if tag.bytes().len() != TAG_SIZE {
+            return Err(format!("Invalid tag: {tag}"));
+        }
         Ok(Controlfield {
-            tag: Tag::new(tag)?,
+            tag: tag.to_string(),
             content: match content {
                 Some(c) => c.to_string(),
                 _ => String::new(),
@@ -89,7 +73,7 @@ impl Indicator {
 /// A MARC Data Field with tag, indicators, and subfields.
 #[derive(Debug, Clone)]
 pub struct Field {
-    pub tag: Tag,
+    pub tag: String,
     pub ind1: char,
     pub ind2: char,
     pub subfields: Vec<Subfield>,
@@ -97,8 +81,12 @@ pub struct Field {
 
 impl Field {
     pub fn new(tag: &str) -> Result<Self, String> {
+        if tag.bytes().len() != TAG_SIZE {
+            return Err(format!("Invalid tag: {tag}"));
+        }
+
         Ok(Field {
-            tag: Tag::new(tag)?,
+            tag: tag.to_string(),
             ind1: ' ',
             ind2: ' ',
             subfields: Vec::new(),
@@ -200,22 +188,16 @@ impl Record {
     pub fn get_control_fields(&self, tag: &str) -> Vec<&Controlfield> {
         self.control_fields
             .iter()
-            .filter(|f| f.tag.content.eq(tag))
+            .filter(|f| f.tag.eq(tag))
             .collect()
     }
 
     pub fn get_fields(&self, tag: &str) -> Vec<&Field> {
-        self.fields
-            .iter()
-            .filter(|f| f.tag.content.eq(tag))
-            .collect()
+        self.fields.iter().filter(|f| f.tag.eq(tag)).collect()
     }
 
     pub fn get_fields_mut(&mut self, tag: &str) -> Vec<&mut Field> {
-        self.fields
-            .iter_mut()
-            .filter(|f| f.tag.content.eq(tag))
-            .collect()
+        self.fields.iter_mut().filter(|f| f.tag.eq(tag)).collect()
     }
 
     pub fn add_control_field(&mut self, tag: &str, content: &str) -> Result<(), String> {
@@ -232,7 +214,7 @@ impl Record {
         let mut pos = 0;
         for (idx, f) in self.control_fields.iter().enumerate() {
             pos = idx;
-            if f.tag.content.as_str() > tag {
+            if f.tag.as_str() > tag {
                 break;
             }
         }
@@ -279,7 +261,7 @@ impl Record {
         let mut pos = 0;
         for (idx, f) in self.fields.iter().enumerate() {
             pos = idx;
-            if f.tag.content.as_str() > tag {
+            if f.tag.as_str() > tag {
                 break;
             }
         }
