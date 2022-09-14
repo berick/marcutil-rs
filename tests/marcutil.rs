@@ -74,3 +74,23 @@ fn binary() {
 
     assert_eq!(src_bytes, bytes);
 }
+
+#[test]
+fn set_values() {
+    let v = "Hello, Mars!";
+
+    let mut record = Record::from_xml(MARC_XML).expect("Created record from XML");
+    let breaker1 = record.to_breaker();
+    let field = &mut record.get_fields_mut("028")[0];
+    let sf = &mut field.get_subfields_mut("a")[0];
+
+    sf.set_content(v);
+
+    let w = record.get_values("028", "a")[0];
+    let breaker2 = record.to_breaker();
+
+    assert_eq!(v, w);
+
+    assert_ne!(breaker1, breaker2);
+}
+
