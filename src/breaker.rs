@@ -1,6 +1,5 @@
 use super::Controlfield;
 use super::Field;
-use super::Leader;
 use super::Record;
 use super::Subfield;
 
@@ -60,20 +59,10 @@ impl Field {
     }
 }
 
-impl Leader {
-    pub fn to_breaker(&self) -> String {
-        format!("LDR {}", escape_to_breaker(&self.content))
-    }
-}
-
 impl Record {
     /// Creates the MARC Breaker representation of this record as a String.
     pub fn to_breaker(&self) -> String {
-        let mut s = String::from("");
-
-        if let Some(ref l) = self.leader {
-            s += l.to_breaker().as_str();
-        }
+        let mut s = format!("LDR {}", &escape_to_breaker(&self.leader));
 
         for cfield in &self.control_fields {
             s += format!("\n{}", cfield.to_breaker()).as_str();

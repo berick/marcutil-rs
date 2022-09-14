@@ -308,7 +308,7 @@ impl Record {
     pub fn to_binary(&self) -> Result<Vec<u8>, String> {
         let mut bytes: Vec<u8> = Vec::new();
 
-        self.add_leader(&mut bytes);
+        bytes.append(&mut self.leader.as_bytes().to_vec());
 
         // Directory
         let num_dirs = self.build_directory(&mut bytes);
@@ -325,17 +325,6 @@ impl Record {
         self.sync_leader(num_dirs, &mut bytes);
 
         Ok(bytes)
-    }
-
-    /// Add the leader to the binary record in progress
-    // Create a dummy leader if necessary.
-    fn add_leader(&self, bytes: &mut Vec<u8>) {
-        let mut vec = match &self.leader {
-            Some(l) => l.content.as_bytes().to_vec(),
-            None => (0..LEADER_SIZE).map(|_| '0' as u8).collect::<Vec<u8>>(),
-        };
-
-        bytes.append(&mut vec);
     }
 
     fn build_directory(&self, bytes: &mut Vec<u8>) -> usize {

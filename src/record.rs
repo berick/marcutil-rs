@@ -2,6 +2,7 @@
 const TAG_SIZE: usize = 3;
 const LEADER_SIZE: usize = 24;
 const SF_CODE_SIZE: usize = 1;
+pub const DEFAULT_LEADER: &str = "                        ";
 
 /// MARC Control Field whose tag value is < "010"
 #[derive(Debug, Clone)]
@@ -119,26 +120,8 @@ impl Field {
 }
 
 #[derive(Debug, Clone)]
-pub struct Leader {
-    pub content: String,
-}
-
-impl Leader {
-    /// Returns Err() if leader does not contain the expected number of bytes
-    pub fn new(content: &str) -> Result<Self, String> {
-        if content.bytes().len() != LEADER_SIZE {
-            return Err(format!("Invalid leader: {content}"));
-        }
-
-        Ok(Leader {
-            content: String::from(content),
-        })
-    }
-}
-
-#[derive(Debug, Clone)]
 pub struct Record {
-    pub leader: Option<Leader>,
+    pub leader: String,
     pub control_fields: Vec<Controlfield>,
     pub fields: Vec<Field>,
 }
@@ -147,7 +130,7 @@ pub struct Record {
 impl Record {
     pub fn new() -> Self {
         Record {
-            leader: None,
+            leader: DEFAULT_LEADER.to_string(),
             control_fields: Vec::new(),
             fields: Vec::new(),
         }
@@ -158,7 +141,11 @@ impl Record {
     /// Returns Err if the value is not composed of the correct number
     /// of bytes.
     pub fn set_leader(&mut self, leader: &str) -> Result<(), String> {
-        self.leader = Some(Leader::new(leader)?);
+        if leader.bytes().len() != LEADER_SIZE {
+            return Err(format!("Invalid leader: {leader}"));
+        }
+
+        self.leader = leader.to_string();
         Ok(())
     }
 
@@ -169,7 +156,7 @@ impl Record {
     pub fn set_leader_bytes(&mut self, bytes: &[u8]) -> Result<(), String> {
         match std::str::from_utf8(bytes) {
             Ok(leader) => {
-                self.leader = Some(Leader::new(leader)?);
+                self.set_leader(leader)?;
                 return Ok(());
             }
             Err(e) => Err(format!(

@@ -306,8 +306,8 @@ impl Record {
     }
 
     fn to_xml_shared(&self, formatted: bool) -> Result<String, String> {
-        // We could use XmlWriter here, but it's overkill and
-        // not quite as configurable as I'd like.
+        // We could use XmlWriter here, but manual creation works fine
+        // and offers more flexibility.
 
         let mut xml = String::from(r#"<?xml version="1.0"?>"#);
 
@@ -328,12 +328,7 @@ impl Record {
         // Leader
 
         format(formatted, &mut xml, 2);
-
-        xml += "<leader>";
-        if let Some(ref l) = self.leader {
-            xml += &escape_xml(&l.content);
-        }
-        xml += "</leader>";
+        xml += &format!("<leader>{}</leader>", &escape_xml(&self.leader));
 
         // Control Fields
 
