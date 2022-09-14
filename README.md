@@ -6,7 +6,10 @@
 use marcutil::Record;
 
 // Parse an XML string
-let record = Record::from_xml(MARC_XML_STR).expect("Created record from XML");
+let record = Record::from_xml(MARC_XML_STR)
+    .expect("Create Iterator")
+    .next()
+    .expect("XML contains a record");
 
 if let Some(title) = record.get_values("245", "a").first() {
     println!("Maintitle => {title}");

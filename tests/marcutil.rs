@@ -10,7 +10,10 @@ const MARC_BINARY: &str = r#"00260nz  a2200109O  4500001000300000003000500003005
 
 #[test]
 fn breaker_round_trip() {
-    let record = Record::from_xml(MARC_XML).expect("Created record from XML");
+    let record = Record::from_xml(MARC_XML)
+        .next()
+        .expect("XML String Contains a Record");
+
     let breaker = record.to_breaker();
 
     let record2 = Record::from_breaker(&breaker).expect("Built from breaker");
@@ -21,7 +24,10 @@ fn breaker_round_trip() {
 
 #[test]
 fn xml_round_trip() {
-    let record = Record::from_xml(MARC_XML).expect("Created record from XML");
+    let record = Record::from_xml(MARC_XML)
+        .next()
+        .expect("XML String Contains a Record");
+
     let xml = record.to_xml().expect("To XML");
 
     assert_eq!(MARC_XML, xml);
@@ -29,7 +35,10 @@ fn xml_round_trip() {
 
 #[test]
 fn all_round_trip() {
-    let record = Record::from_xml(MARC_XML).expect("Created record from XML");
+    let record = Record::from_xml(MARC_XML)
+        .next()
+        .expect("XML String Contains a Record");
+
     let breaker = record.to_breaker();
 
     let record2 = Record::from_breaker(&breaker).expect("Built from breaker");
@@ -40,10 +49,11 @@ fn all_round_trip() {
 
 #[test]
 fn odd_records() {
-    let op = Record::from_xml(EMPTY_MARC_XML);
-    assert!(op.is_ok());
+    let record = Record::from_xml(EMPTY_MARC_XML)
+        .next()
+        .expect("XML String Contains a Record");
 
-    let brk = op.unwrap().to_breaker();
+    let brk = record.to_breaker();
     assert_eq!(brk, format!("LDR {}", DEFAULT_LEADER));
 
     let op = Record::from_breaker(&brk);
@@ -54,11 +64,12 @@ fn odd_records() {
 
     assert_eq!(EMPTY_MARC_XML, xml_op.unwrap());
 
-    let op = Record::from_xml(r#"<record><controlfield tag="123">"#);
-    assert!(op.is_err());
+    let op = Record::from_xml(r#"<record><controlfield tag="123">"#).next();
+    assert!(op.is_none());
 
-    let op = Record::from_xml(r#"<record><controlfield tag="1234"></controlfield></record>"#);
-    assert!(op.is_err());
+    let op =
+        Record::from_xml(r#"<record><controlfield tag="1234"></controlfield></record>"#).next();
+    assert!(op.is_none());
 }
 
 #[test]
@@ -80,7 +91,10 @@ fn binary() {
 fn set_values() {
     let v = "Hello, Mars!";
 
-    let mut record = Record::from_xml(MARC_XML).expect("Created record from XML");
+    let mut record = Record::from_xml(MARC_XML)
+        .next()
+        .expect("XML Contains a Record");
+
     let breaker1 = record.to_breaker();
     let field = &mut record.get_fields_mut("028")[0];
     let sf = &mut field.get_subfields_mut("a")[0];

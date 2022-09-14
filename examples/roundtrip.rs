@@ -15,7 +15,14 @@ fn main() {
     let bin_file_op = params.opt_str("bin-file");
 
     if xml_file_op.is_some() {
-        for mut record in Record::from_xml_file(&xml_file_op.unwrap()).expect("Created Iterator") {
+        let fname = xml_file_op.unwrap();
+
+        let s = std::fs::read_to_string(&fname).unwrap();
+        let rec = Record::from_xml(&s).next().expect("XML contains a record");
+
+        println!("From XML String: leader={}", rec.leader);
+
+        for mut record in Record::from_xml_file(&fname).expect("Created Iterator") {
             inspect_record(&mut record);
         }
     }
