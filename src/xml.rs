@@ -2,6 +2,7 @@ use std::fs::File;
 use std::io::BufReader;
 use std::io::Cursor;
 use xml::reader::{EventReader, XmlEvent};
+use xml::attribute::OwnedAttribute;
 
 use super::Controlfield;
 use super::Field;
@@ -127,6 +128,7 @@ impl XmlRecordIterator {
             }
 
             if context.record_complete {
+
                 let r = context.record.to_owned();
                 context.record = Record::new();
 
@@ -145,84 +147,16 @@ impl XmlRecordIterator {
     }
 
     /// Process a single XML read event
-    fn handle_xml_event(
-        &mut self,
-        context: &mut XmlParseContext,
-        evt: XmlEvent,
-    ) -> Result<(), String> {
+    fn handle_xml_event(&mut self,
+        context: &mut XmlParseContext, evt: XmlEvent) -> Result<(), String> {
+
         let record = &mut context.record;
 
         match evt {
-            XmlEvent::StartElement {
-                name, attributes, ..
-            } => match name.local_name.as_str() {
-                "leader" => {
-                    context.in_leader = true;
-                }
 
-                "controlfield" => {
-                    if let Some(t) = attributes
-                        .iter()
-                        .filter(|a| a.name.local_name.eq("tag"))
-                        .next()
-                    {
-                        record
-                            .control_fields
-                            .push(Controlfield::new(&t.value, None)?);
-                        context.in_cfield = true;
-                    } else {
-                        return Err(format!("Controlfield has no tag"));
-                    }
-                }
-
-                "datafield" => {
-
-                    let mut field;
-
-                    if let Some(t) = attributes
-                        .iter()
-                        .filter(|a| a.name.local_name.eq("tag"))
-                        .next()
-                    {
-                        field = Field::new(&t.value)?;
-                    } else {
-                        return Err(format!("Data field has no tag"));
-                    }
-
-                    if let Some(ind) = attributes
-                        .iter()
-                        .filter(|a| a.name.local_name.eq("ind1"))
-                        .next()
-                    {
-                        field.set_ind1(&ind.value)?;
-                    }
-
-                    if let Some(ind) = attributes
-                        .iter()
-                        .filter(|a| a.name.local_name.eq("ind2"))
-                        .next()
-                    {
-                        field.set_ind2(&ind.value)?;
-                    }
-
-                    record.fields.push(field);
-                }
-
-                "subfield" => {
-                    if let Some(field) = record.fields.last_mut() {
-                        if let Some(code) = attributes
-                            .iter()
-                            .filter(|a| a.name.local_name.eq("code"))
-                            .next()
-                        {
-                            if let Ok(sf) = Subfield::new(&code.value, None) {
-                                context.in_subfield = true;
-                                field.subfields.push(sf);
-                            }
-                        }
-                    }
-                }
-                _ => {}
+            XmlEvent::StartElement { name, attributes, .. } => {
+                self.handle_start_element(
+                    context, name.local_name.as_str(), &attributes)?;
             },
 
             XmlEvent::Characters(ref characters) => {
@@ -257,6 +191,88 @@ impl XmlRecordIterator {
             }
 
             _ => {}
+        }
+
+        Ok(())
+    }
+
+    fn handle_start_element(
+        &mut self,
+        context: &mut XmlParseContext,
+        name: &str,
+        attributes: &Vec<OwnedAttribute>
+    ) -> Result<(), String> {
+
+        let record = &mut context.record;
+
+        match name {
+
+            "leader" => context.in_leader = true,
+
+            "controlfield" => {
+                if let Some(t) = attributes
+                    .iter()
+                    .filter(|a| a.name.local_name.eq("tag"))
+                    .next()
+                {
+                    record
+                        .control_fields
+                        .push(Controlfield::new(&t.value, None)?);
+                    context.in_cfield = true;
+                } else {
+                    return Err(format!("Controlfield has no tag"));
+                }
+            }
+
+            "datafield" => {
+
+                let mut field;
+
+                if let Some(t) = attributes
+                    .iter()
+                    .filter(|a| a.name.local_name.eq("tag"))
+                    .next()
+                {
+                    field = Field::new(&t.value)?;
+                } else {
+                    return Err(format!("Data field has no tag"));
+                }
+
+                if let Some(ind) = attributes
+                    .iter()
+                    .filter(|a| a.name.local_name.eq("ind1"))
+                    .next()
+                {
+                    field.set_ind1(&ind.value)?;
+                }
+
+                if let Some(ind) = attributes
+                    .iter()
+                    .filter(|a| a.name.local_name.eq("ind2"))
+                    .next()
+                {
+                    field.set_ind2(&ind.value)?;
+                }
+
+                record.fields.push(field);
+            }
+
+            "subfield" => {
+                if let Some(field) = record.fields.last_mut() {
+                    if let Some(code) = attributes
+                        .iter()
+                        .filter(|a| a.name.local_name.eq("code"))
+                        .next()
+                    {
+                        if let Ok(sf) = Subfield::new(&code.value, None) {
+                            context.in_subfield = true;
+                            field.subfields.push(sf);
+                        }
+                    }
+                }
+            },
+            _ => {}
+
         }
 
         Ok(())
