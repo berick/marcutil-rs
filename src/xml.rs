@@ -226,53 +226,43 @@ impl XmlRecordIterator {
 
             "datafield" => {
 
-                let mut field;
+                let mut field = match attributes
+                    .iter().filter(|a| a.name.local_name.eq("tag")).next() {
+                    Some(attr) => Field::new(&attr.value)?,
+                    None => {
+                        return Err(format!("Data field has no tag"));
+                    }
+                };
 
-                if let Some(t) = attributes
-                    .iter()
-                    .filter(|a| a.name.local_name.eq("tag"))
-                    .next()
-                {
-                    field = Field::new(&t.value)?;
-                } else {
-                    return Err(format!("Data field has no tag"));
-                }
-
-                if let Some(ind) = attributes
-                    .iter()
-                    .filter(|a| a.name.local_name.eq("ind1"))
-                    .next()
-                {
-                    field.set_ind1(&ind.value)?;
-                }
-
-                if let Some(ind) = attributes
-                    .iter()
-                    .filter(|a| a.name.local_name.eq("ind2"))
-                    .next()
-                {
-                    field.set_ind2(&ind.value)?;
+                for attr in attributes {
+                    match attr.name.local_name.as_str() {
+                        "ind1" => field.set_ind1(&attr.value)?,
+                        "ind2" => field.set_ind2(&attr.value)?,
+                        _ => {}
+                    }
                 }
 
                 record.fields.push(field);
             }
 
             "subfield" => {
-                if let Some(field) = record.fields.last_mut() {
-                    if let Some(code) = attributes
-                        .iter()
-                        .filter(|a| a.name.local_name.eq("code"))
-                        .next()
-                    {
-                        if let Ok(sf) = Subfield::new(&code.value, None) {
-                            context.in_subfield = true;
-                            field.subfields.push(sf);
-                        }
+                let field_op = record.fields.last_mut();
+
+                if field_op.is_none() {
+                    return Err(format!("Encounted <subfield/> without a field"));
+                }
+
+                let field = field_op.unwrap();
+                for attr in attributes {
+                    if attr.name.local_name.eq("code") {
+                        context.in_subfield = true;
+                        field.subfields.push(Subfield::new(&attr.value, None)?);
+                        break;
                     }
                 }
+
             },
             _ => {}
-
         }
 
         Ok(())
