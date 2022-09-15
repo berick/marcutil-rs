@@ -1,4 +1,5 @@
 use std::fs::File;
+use std::io::BufReader;
 use std::io::Cursor;
 use xml::reader::{EventReader, XmlEvent};
 
@@ -56,7 +57,7 @@ struct XmlParseContext {
 }
 
 pub struct XmlRecordIterator {
-    file_reader: Option<EventReader<File>>,
+    file_reader: Option<EventReader<BufReader<File>>>,
     byte_reader: Option<EventReader<Cursor<Vec<u8>>>>,
 }
 
@@ -87,7 +88,7 @@ impl XmlRecordIterator {
 
         Ok(XmlRecordIterator {
             byte_reader: None,
-            file_reader: Some(EventReader::new(file)),
+            file_reader: Some(EventReader::new(BufReader::new(file))),
         })
     }
 
@@ -100,18 +101,17 @@ impl XmlRecordIterator {
         }
     }
 
+    /// Pull the next Record from the data source.
     fn read_next(&mut self, context: &mut XmlParseContext) -> Option<Record> {
-
         loop {
-
             let evt_res = match &mut self.file_reader {
                 Some(fr) => fr.next(),
-                None => {
-                    match &mut self.byte_reader {
-                        Some(br) => br.next(),
-                        None => { return None; }
+                None => match &mut self.byte_reader {
+                    Some(br) => br.next(),
+                    None => {
+                        return None;
                     }
-                }
+                },
             };
 
             if let Err(e) = evt_res {
@@ -131,14 +131,11 @@ impl XmlRecordIterator {
             let doc_complete = handle_res.unwrap();
 
             if doc_complete {
-
                 // If we had a doc in progress, discard it.
                 context.record = Record::new();
 
                 return None;
-
             } else if context.record_complete {
-
                 let r = context.record.to_owned();
                 context.record = Record::new();
 
@@ -147,18 +144,15 @@ impl XmlRecordIterator {
         }
     }
 
-
     /// Process a single XML read event
     fn handle_xml_event(
         &mut self,
         context: &mut XmlParseContext,
         evt: XmlEvent,
     ) -> Result<bool, String> {
-
         let record = &mut context.record;
 
         match evt {
-
             XmlEvent::StartElement {
                 name, attributes, ..
             } => match name.local_name.as_str() {
@@ -231,17 +225,14 @@ impl XmlRecordIterator {
             },
 
             XmlEvent::Characters(ref characters) => {
-
                 if context.in_leader {
                     record.set_leader(characters)?;
                     context.in_leader = false;
-
                 } else if context.in_cfield {
                     if let Some(cf) = record.control_fields.last_mut() {
                         cf.set_content(characters);
                     }
                     context.in_cfield = false;
-
                 } else if context.in_subfield {
                     if let Some(field) = record.fields.last_mut() {
                         if let Some(subfield) = field.subfields.last_mut() {
@@ -259,7 +250,7 @@ impl XmlRecordIterator {
 
             XmlEvent::EndDocument => {
                 return Ok(true);
-            },
+            }
 
             _ => {}
         }
@@ -269,7 +260,6 @@ impl XmlRecordIterator {
 }
 
 impl Record {
-
     /// Returns an iterator over the XML file which emits Records.
     pub fn from_xml_file(filename: &str) -> Result<XmlRecordIterator, String> {
         Ok(XmlRecordIterator::from_file(filename)?)
