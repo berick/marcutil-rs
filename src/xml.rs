@@ -48,6 +48,7 @@ fn format(formatted: bool, value: &mut String, depth: u8) {
 }
 
 struct XmlParseContext {
+    record: Record,
     in_cfield: bool,
     in_subfield: bool,
     in_leader: bool,
@@ -64,17 +65,14 @@ impl Iterator for XmlRecordIterator {
 
     fn next(&mut self) -> Option<Self::Item> {
         let mut context = XmlParseContext {
+            record: Record::new(),
             in_cfield: false,
             in_subfield: false,
             in_leader: false,
             record_complete: false,
         };
 
-        if self.file_reader.is_some() {
-            self.read_next_from_file(&mut context)
-        } else {
-            self.read_next_from_string(&mut context)
-        }
+        self.read_next(&mut context)
     }
 }
 
@@ -102,110 +100,65 @@ impl XmlRecordIterator {
         }
     }
 
-    fn read_next_from_string(&mut self, context: &mut XmlParseContext) -> Option<Record> {
-        let mut record = Record::new();
-
-        let reader = match &mut self.byte_reader {
-            Some(r) => r,
-            None => {
-                return None;
-            }
-        };
+    fn read_next(&mut self, context: &mut XmlParseContext) -> Option<Record> {
 
         loop {
-            match reader.next() {
-                Ok(evt) => {
-                    if XmlEvent::EndDocument == evt {
-                        // All done.
-                        return None;
-                    }
 
-                    match Record::handle_xml_read_event(&mut record, context, evt) {
-                        Ok(_) => {
-                            if context.record_complete {
-                                return Some(record);
-                            }
-                        }
-                        Err(e) => {
-                            // Can't return an Err() from an iterator, so
-                            // log the issue and carry on.
-                            eprintln!("Error processing XML: {e}");
-                            return None;
-                        }
+            let evt_res = match &mut self.file_reader {
+                Some(fr) => fr.next(),
+                None => {
+                    match &mut self.byte_reader {
+                        Some(br) => br.next(),
+                        None => { return None; }
                     }
                 }
-                Err(e) => {
-                    // Can't return an Err() from an iterator, so
-                    // log the issue and carry on.
-                    eprintln!("Error processing XML: {e}");
-                    return None;
-                }
+            };
+
+            if let Err(e) = evt_res {
+                eprintln!("Error processing XML: {e}");
+                return None;
+            }
+
+            let evt = evt_res.unwrap(); // Sanity checked above.
+
+            let handle_res = self.handle_xml_event(context, evt);
+
+            if let Err(e) = handle_res {
+                eprintln!("Error processing XML: {e}");
+                return None;
+            }
+
+            let doc_complete = handle_res.unwrap();
+
+            if doc_complete {
+
+                // If we had a doc in progress, discard it.
+                context.record = Record::new();
+
+                return None;
+
+            } else if context.record_complete {
+
+                let r = context.record.to_owned();
+                context.record = Record::new();
+
+                return Some(r);
             }
         }
     }
 
-    fn read_next_from_file(&mut self, context: &mut XmlParseContext) -> Option<Record> {
-        let mut record = Record::new();
-
-        let reader = match &mut self.file_reader {
-            Some(r) => r,
-            None => {
-                return None;
-            }
-        };
-
-        loop {
-            match reader.next() {
-                Ok(evt) => {
-                    if XmlEvent::EndDocument == evt {
-                        // All done.
-                        return None;
-                    }
-
-                    match Record::handle_xml_read_event(&mut record, context, evt) {
-                        Ok(_) => {
-                            if context.record_complete {
-                                return Some(record);
-                            }
-                        }
-                        Err(e) => {
-                            // Can't return an Err() from an iterator, so
-                            // log the issue and carry on.
-                            eprintln!("Error processing XML: {e}");
-                            return None;
-                        }
-                    }
-                }
-                Err(e) => {
-                    // Can't return an Err() from an iterator, so
-                    // log the issue and carry on.
-                    eprintln!("Error processing XML: {e}");
-                    return None;
-                }
-            }
-        }
-    }
-}
-
-impl Record {
-
-    /// Returns an iterator over the XML file which emits Records.
-    pub fn from_xml_file(filename: &str) -> Result<XmlRecordIterator, String> {
-        Ok(XmlRecordIterator::from_file(filename)?)
-    }
-
-    /// Returns an iterator over the XML string which emits Records.
-    pub fn from_xml(xml: &str) -> XmlRecordIterator {
-        XmlRecordIterator::from_string(xml)
-    }
 
     /// Process a single XML read event
-    fn handle_xml_read_event(
-        record: &mut Record,
+    fn handle_xml_event(
+        &mut self,
         context: &mut XmlParseContext,
         evt: XmlEvent,
-    ) -> Result<(), String> {
+    ) -> Result<bool, String> {
+
+        let record = &mut context.record;
+
         match evt {
+
             XmlEvent::StartElement {
                 name, attributes, ..
             } => match name.local_name.as_str() {
@@ -278,14 +231,17 @@ impl Record {
             },
 
             XmlEvent::Characters(ref characters) => {
+
                 if context.in_leader {
                     record.set_leader(characters)?;
                     context.in_leader = false;
+
                 } else if context.in_cfield {
                     if let Some(cf) = record.control_fields.last_mut() {
                         cf.set_content(characters);
                     }
                     context.in_cfield = false;
+
                 } else if context.in_subfield {
                     if let Some(field) = record.fields.last_mut() {
                         if let Some(subfield) = field.subfields.last_mut() {
@@ -301,10 +257,27 @@ impl Record {
                 _ => {}
             },
 
+            XmlEvent::EndDocument => {
+                return Ok(true);
+            },
+
             _ => {}
         }
 
-        Ok(())
+        Ok(false)
+    }
+}
+
+impl Record {
+
+    /// Returns an iterator over the XML file which emits Records.
+    pub fn from_xml_file(filename: &str) -> Result<XmlRecordIterator, String> {
+        Ok(XmlRecordIterator::from_file(filename)?)
+    }
+
+    /// Returns an iterator over the XML string which emits Records.
+    pub fn from_xml(xml: &str) -> XmlRecordIterator {
+        XmlRecordIterator::from_string(xml)
     }
 
     /// Creates the XML representation of a MARC record as a String.
@@ -318,6 +291,7 @@ impl Record {
         self.to_xml_shared(true)
     }
 
+    /// Create the actual XML.
     fn to_xml_shared(&self, formatted: bool) -> Result<String, String> {
         // We could use XmlWriter here, but manual creation works fine
         // and offers more flexibility.
