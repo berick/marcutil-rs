@@ -54,11 +54,12 @@ struct XmlParseContext {
     in_subfield: bool,
     in_leader: bool,
     record_complete: bool,
+    doc_complete: bool,
 }
 
-pub struct XmlRecordIterator {
-    file_reader: Option<EventReader<BufReader<File>>>,
-    byte_reader: Option<EventReader<Cursor<Vec<u8>>>>,
+pub enum XmlRecordIterator {
+    FileReader(EventReader<BufReader<File>>),
+    ByteReader(EventReader<Cursor<Vec<u8>>>),
 }
 
 impl Iterator for XmlRecordIterator {
@@ -71,6 +72,7 @@ impl Iterator for XmlRecordIterator {
             in_subfield: false,
             in_leader: false,
             record_complete: false,
+            doc_complete: false,
         };
 
         self.read_next(&mut context)
@@ -78,40 +80,36 @@ impl Iterator for XmlRecordIterator {
 }
 
 impl XmlRecordIterator {
-    pub fn from_file(filename: &str) -> Result<Self, String> {
-        let file = match File::open(filename) {
-            Ok(f) => f,
-            Err(e) => {
-                return Err(format!("Cannot read MARCXML file: {filename} {e}"));
-            }
-        };
 
-        Ok(XmlRecordIterator {
-            byte_reader: None,
-            file_reader: Some(EventReader::new(BufReader::new(file))),
-        })
+    pub fn from_file(filename: &str) -> Result<Self, String> {
+        match File::open(filename) {
+            Ok(file) => {
+                Ok(XmlRecordIterator::FileReader(
+                    EventReader::new(BufReader::new(file))
+                ))
+            },
+            Err(e) => {
+                Err(format!("Cannot read MARCXML file: {filename} {e}"))
+            }
+        }
     }
 
     pub fn from_string(xml: &str) -> Self {
-        let c = Cursor::new(xml.as_bytes().to_vec());
-
-        XmlRecordIterator {
-            byte_reader: Some(EventReader::new(c)),
-            file_reader: None,
-        }
+        XmlRecordIterator::ByteReader(
+            EventReader::new(
+                Cursor::new(xml.as_bytes().to_vec())
+            )
+        )
     }
 
     /// Pull the next Record from the data source.
     fn read_next(&mut self, context: &mut XmlParseContext) -> Option<Record> {
+
         loop {
-            let evt_res = match &mut self.file_reader {
-                Some(fr) => fr.next(),
-                None => match &mut self.byte_reader {
-                    Some(br) => br.next(),
-                    None => {
-                        return None;
-                    }
-                },
+
+            let evt_res = match *self {
+                XmlRecordIterator::FileReader(ref mut reader) => reader.next(),
+                XmlRecordIterator::ByteReader(ref mut reader) => reader.next(),
             };
 
             if let Err(e) = evt_res {
@@ -128,19 +126,21 @@ impl XmlRecordIterator {
                 return None;
             }
 
-            let doc_complete = handle_res.unwrap();
-
-            if doc_complete {
-                // If we had a doc in progress, discard it.
-                context.record = Record::new();
-
-                return None;
-            } else if context.record_complete {
+            if context.record_complete {
                 let r = context.record.to_owned();
                 context.record = Record::new();
 
                 return Some(r);
+
+            } else if context.doc_complete {
+
+                // If we had a doc in progress, discard it.
+                context.record = Record::new();
+
+                return None;
             }
+
+            // Keep processing events...
         }
     }
 
@@ -149,7 +149,7 @@ impl XmlRecordIterator {
         &mut self,
         context: &mut XmlParseContext,
         evt: XmlEvent,
-    ) -> Result<bool, String> {
+    ) -> Result<(), String> {
         let record = &mut context.record;
 
         match evt {
@@ -176,12 +176,15 @@ impl XmlRecordIterator {
                 }
 
                 "datafield" => {
+
+                    let mut field;
+
                     if let Some(t) = attributes
                         .iter()
                         .filter(|a| a.name.local_name.eq("tag"))
                         .next()
                     {
-                        record.fields.push(Field::new(&t.value)?);
+                        field = Field::new(&t.value)?;
                     } else {
                         return Err(format!("Data field has no tag"));
                     }
@@ -191,9 +194,7 @@ impl XmlRecordIterator {
                         .filter(|a| a.name.local_name.eq("ind1"))
                         .next()
                     {
-                        if let Some(field) = record.fields.last_mut() {
-                            field.set_ind1(&ind.value)?;
-                        }
+                        field.set_ind1(&ind.value)?;
                     }
 
                     if let Some(ind) = attributes
@@ -201,10 +202,10 @@ impl XmlRecordIterator {
                         .filter(|a| a.name.local_name.eq("ind2"))
                         .next()
                     {
-                        if let Some(field) = record.fields.last_mut() {
-                            field.set_ind2(&ind.value)?;
-                        }
+                        field.set_ind2(&ind.value)?;
                     }
+
+                    record.fields.push(field);
                 }
 
                 "subfield" => {
@@ -225,14 +226,17 @@ impl XmlRecordIterator {
             },
 
             XmlEvent::Characters(ref characters) => {
+
                 if context.in_leader {
                     record.set_leader(characters)?;
                     context.in_leader = false;
+
                 } else if context.in_cfield {
                     if let Some(cf) = record.control_fields.last_mut() {
                         cf.set_content(characters);
                     }
                     context.in_cfield = false;
+
                 } else if context.in_subfield {
                     if let Some(field) = record.fields.last_mut() {
                         if let Some(subfield) = field.subfields.last_mut() {
@@ -249,17 +253,18 @@ impl XmlRecordIterator {
             },
 
             XmlEvent::EndDocument => {
-                return Ok(true);
+                context.doc_complete = true;
             }
 
             _ => {}
         }
 
-        Ok(false)
+        Ok(())
     }
 }
 
 impl Record {
+
     /// Returns an iterator over the XML file which emits Records.
     pub fn from_xml_file(filename: &str) -> Result<XmlRecordIterator, String> {
         Ok(XmlRecordIterator::from_file(filename)?)
