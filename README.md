@@ -6,12 +6,12 @@
 use marcutil::Record;
 
 // Read a MARC binary file
-for rec in Record::from_binary_file(MARC_FILENAME).unwrap() {
+for rec in Record::from_binary_file("/path/to/records.mrc").unwrap() {
     println!("\nBinary record as xml:\n{}", rec.to_xml_formatted().unwrap());
 }
 
 // Read a MARC XML file
-let record = Record::from_xml(MARC_XML_STR).next().unwrap();
+let record = Record::from_xml("/path/to/records.xml").next().unwrap();
 
 if let Some(title) = record.get_values("245", "a").first() {
     println!("Maintitle => {title}");
@@ -24,10 +24,12 @@ if let Some(field) = record.get_fields_mut("245").first_mut() {
     }
 }
 
+// Confirm we changed the value
 if let Some(title) = record.get_values("245", "a").first() {
     println!("New Maintitle => {title}");
 }
 
+// Add some fields
 record.add_control_field("005", "123123123123").unwrap();
 
 record.add_data_field(
