@@ -5,11 +5,13 @@
 ```rs
 use marcutil::Record;
 
-// Parse an XML string
-let record = Record::from_xml(MARC_XML_STR)
-    .expect("Create Iterator")
-    .next()
-    .expect("XML contains a record");
+// Read a MARC binary file
+for rec in Record::from_binary_file(MARC_FILENAME).unwrap() {
+    println!("\nBinary record as xml:\n{}", rec.to_xml_formatted().unwrap());
+}
+
+// Read a MARC XML file
+let record = Record::from_xml(MARC_XML_STR).next().unwrap();
 
 if let Some(title) = record.get_values("245", "a").first() {
     println!("Maintitle => {title}");
@@ -26,10 +28,10 @@ if let Some(title) = record.get_values("245", "a").first() {
     println!("New Maintitle => {title}");
 }
 
-record.add_control_field("005", "123123123123").expect("Added Control Field");
+record.add_control_field("005", "123123123123").unwrap();
 
-record.add_data_field("650", "1", " ", vec!["a", "Hobbits", "b", "Fiction"])
-	.expect("Added Data Field");
+record.add_data_field(
+    "650", "1", " ", vec!["a", "Hobbits", "b", "Fiction"]).unwrap();
 
 // Turn the record into Breaker text
 let breaker = record.to_breaker();
@@ -37,18 +39,12 @@ let breaker = record.to_breaker();
 println!("Breaker: {breaker}");
 
 // Create a new record from previous record's breaker
-let record2 = Record::from_breaker(&breaker).expect("Built from breaker");
+let record2 = Record::from_breaker(&breaker).unwrap();
 
 // Generate XML from our new record
-let xml = record2.to_xml().expect("To XML");
+let xml = record2.to_xml().unwrap();
 
 println!("Generated XML: {xml}");
-
-// Binary file reading
-for rec in Record::from_binary_file(MARC_FILENAME).expect("Start Binary File") {
-    println!("\nBinary record as xml:\n{}", rec.to_xml_formatted().unwrap());
-}
-
 ```
 
 ## About
