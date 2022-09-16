@@ -14,23 +14,22 @@ fn main() {
     let xml_file_op = params.opt_str("xml-file");
     let bin_file_op = params.opt_str("bin-file");
 
-    if xml_file_op.is_some() {
-        let fname = xml_file_op.unwrap();
-
-        let s = std::fs::read_to_string(&fname).unwrap();
-        let rec = Record::from_xml(&s).next().expect("XML contains a record");
-
-        println!("From XML String: leader={}", rec.leader);
-
-        for mut record in Record::from_xml_file(&fname).expect("Created Iterator") {
+    if let Some(filename) = bin_file_op {
+        for mut record in
+            Record::from_binary_file(&filename).expect("Start Binary File") {
             inspect_record(&mut record);
         }
     }
 
-    if bin_file_op.is_some() {
+    if let Some(filename) = xml_file_op {
+
+        let s = std::fs::read_to_string(&filename).unwrap();
+        let rec = Record::from_xml(&s).next().expect("XML contains a record");
+
+        println!("From XML String: leader={}", rec.leader);
+
         for mut record in
-            Record::from_binary_file(&bin_file_op.unwrap()).expect("Start Binary File")
-        {
+            Record::from_xml_file(&filename).expect("Created Iterator") {
             inspect_record(&mut record);
         }
     }
@@ -66,3 +65,5 @@ fn inspect_record(record: &mut Record) {
 
     println!("Create {} bytes of binary", binary.len());
 }
+
+
