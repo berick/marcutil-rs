@@ -113,16 +113,15 @@ impl XmlRecordIterator {
                 XmlRecordIterator::ByteReader(ref mut reader) => reader.next(),
             };
 
-            if let Err(e) = evt_res {
-                eprintln!("Error processing XML: {e}");
-                return None;
-            }
+            let evt = match evt_res {
+                Ok(e) => e,
+                Err(e) => {
+                    eprintln!("Error processing XML: {e}");
+                    return None;
+                }
+            };
 
-            let evt = evt_res.unwrap(); // Sanity checked above.
-
-            let handle_res = self.handle_xml_event(context, evt);
-
-            if let Err(e) = handle_res {
+            if let Err(e) = self.handle_xml_event(context, evt) {
                 eprintln!("Error processing XML: {e}");
                 return None;
             }
