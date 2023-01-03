@@ -118,6 +118,11 @@ impl Field {
             .collect()
     }
 
+    pub fn add_subfield(&mut self, code: &str, content: Option<&str>) -> Result<(), String> {
+        self.subfields.push(Subfield::new(code, content)?);
+        Ok(())
+    }
+
     /// Remove the first subfield with the specified code.
     pub fn remove_first_subfield(&mut self, code: &str) -> Option<Subfield> {
         if let Some(index) = self.subfields.iter().position(|s| s.code.eq(code)) {
