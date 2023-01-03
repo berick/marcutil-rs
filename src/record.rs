@@ -117,6 +117,30 @@ impl Field {
             .filter(|f| f.code.eq(code))
             .collect()
     }
+
+    /// Remove the first subfield with the specified code.
+    pub fn remove_first_subfield(&mut self, code: &str) -> Option<Subfield> {
+        if let Some(index) = self.subfields.iter().position(|s| s.code.eq(code)) {
+            return Some(self.subfields.remove(index))
+        }
+
+        None
+    }
+
+    /// Remove all subfields with the specified code
+    pub fn remove_subfields(&mut self, code: &str) -> Vec<Subfield> {
+        let mut removed: Vec<Subfield> = Vec::new();
+
+        loop {
+            if let Some(index) = self.subfields.iter().position(|s| s.code.eq(code)) {
+                removed.push(self.subfields.remove(index));
+            } else {
+                break;
+            }
+        }
+
+        removed
+    }
 }
 
 #[derive(Debug, Clone)]

@@ -98,3 +98,15 @@ fn set_values() {
     let breaker2 = record.to_breaker();
     assert_ne!(breaker1, breaker2);
 }
+
+#[test]
+fn delete_values() {
+    let mut record = Record::from_xml(MARC_XML).next().unwrap();
+    let field = &mut record.get_fields_mut("028")[0];
+    assert_eq!(field.subfields.len(), 3);
+
+    let list = field.remove_subfields("a");
+
+    assert_eq!(list.len(), 1);
+    assert_eq!(field.subfields.len(), 2);
+}
